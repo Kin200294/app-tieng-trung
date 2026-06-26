@@ -280,6 +280,8 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         updateStatus('Lỗi: Thiếu quyền Micro.');
       } else if (e.error === 'no-speech') {
         updateStatus('Không nghe rõ âm thanh. Hãy thử lại.');
+      } else if (e.error === 'aborted') {
+        updateStatus('Lỗi: Bị hủy. Hãy dùng Safari/Chrome để mở link trực tiếp.');
       } else {
         updateStatus('Lỗi nhận diện: ' + e.error);
       }
@@ -301,6 +303,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         } else {
           // Bắt đầu thu
           try {
+            speakOutput(""); // Tắt tiếng phát âm đang đọc dở để tránh xung đột
             speechRec.start();
           } catch (e) {
             console.error(e);
@@ -344,6 +347,8 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         updatePronounceStatus('Lỗi: Không được cấp quyền truy cập Mic.');
       } else if (e.error === 'no-speech') {
         updatePronounceStatus('Không nhận thấy giọng nói. Hãy nói to hơn.');
+      } else if (e.error === 'aborted') {
+        updatePronounceStatus('Lỗi: Bị hủy. Hãy dùng Safari/Chrome thay vì trình duyệt Zalo/Facebook.');
       } else {
         updatePronounceStatus('Lỗi: ' + e.error);
       }
@@ -362,6 +367,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           pronounceRec.stop();
         } else {
           try {
+            speakOutput(""); // Tắt loa phát âm đang đọc để tránh xung đột micro
             // Xóa vùng kết quả cũ khi bắt đầu nói lượt mới
             const resArea = $('pronounceResultArea');
             if (resArea) resArea.style.display = 'none';

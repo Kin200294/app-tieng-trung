@@ -245,8 +245,8 @@
   applySound(soundOn);
 
   function speak(text) {
-    if (!text || !soundOn) return;   // tắt tiếng thì không đọc
     if (curAudio) { try { curAudio.pause(); } catch (e) {} curAudio = null; }
+    if (!text || !soundOn) return;   // tắt tiếng thì không đọc
     // Chỉ dùng một giọng duy nhất: Google (translate.googleapis.com, client=gtx)
     const url = 'https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=zh-CN&q=' + encodeURIComponent(text);
     try {
