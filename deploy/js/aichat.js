@@ -1123,7 +1123,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
     // Cập nhật màu thanh tiến độ
     if (diff.score >= 80) {
       $('pronounceScoreBar').style.backgroundColor = 'var(--green-1, #3ed18a)';
-      $('pronounceFeedback').innerHTML = `<span style="color:var(--green-1, #3ed18a);">🎉 Tuyệt vời! Bạn đọc rất tốt! (+2 điểm)</span>`;
+      $('pronounceFeedback').innerHTML = `<span style="color:var(--green-1, #3ed18a); font-weight: bold; display: block; margin-bottom: 5px;">🎉 Tuyệt vời! Bạn đọc rất tốt! (+2 điểm)</span>`;
       // Thưởng điểm
       addPointsReward(2);
       // Gọi callback thành công nếu có
@@ -1132,13 +1132,46 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       }
     } else if (diff.score >= 50) {
       $('pronounceScoreBar').style.backgroundColor = 'var(--gold-2, #d4af37)';
-      $('pronounceFeedback').innerHTML = `<span style="color:var(--gold-1, #f3d98b);">Khá tốt, hãy tập trung phát âm rõ hơn nhé!</span>`;
+      
+      let detailHtml = '';
+      if (diff.errorDetails && diff.errorDetails.length > 0) {
+        detailHtml = `
+          <div style="text-align: left; margin-top: 10px; font-size: 0.9rem; line-height: 1.5; border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 8px; max-height: 120px; overflow-y: auto;">
+            <span style="color:var(--gold-1, #f3d98b); font-weight: bold; display: block; margin-bottom: 4px;">Khá tốt, cần cải thiện một số chữ:</span>
+            <ul style="margin: 0; padding-left: 18px; color: var(--text-color, #e0e0e0);">
+              ${diff.errorDetails.map(err => `<li style="margin-bottom: 3px;">${err}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      $('pronounceFeedback').innerHTML = `
+        <span style="color:var(--gold-1, #f3d98b); font-weight: bold;">Khá tốt, hãy tập trung phát âm rõ hơn nhé!</span>
+        ${detailHtml}
+      `;
       if (typeof currentPronounceCallback === 'function') {
         currentPronounceCallback(false, diff.score);
       }
     } else {
       $('pronounceScoreBar').style.backgroundColor = 'var(--crimson-1, #c0392b)';
-      $('pronounceFeedback').innerHTML = `<span style="color:#e74c3c;">Bạn đọc chưa rõ lắm, bấm "Nghe mẫu" rồi thử lại nhé!</span>`;
+      
+      let detailHtml = '';
+      if (diff.errorDetails && diff.errorDetails.length > 0) {
+        detailHtml = `
+          <div style="text-align: left; margin-top: 10px; font-size: 0.9rem; line-height: 1.5; border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 8px; max-height: 120px; overflow-y: auto;">
+            <span style="color:#e74c3c; font-weight: bold; display: block; margin-bottom: 4px;">Chi tiết lỗi phát âm:</span>
+            <ul style="margin: 0; padding-left: 18px; color: var(--text-color, #e0e0e0);">
+              ${diff.errorDetails.map(err => `<li style="margin-bottom: 3px;">${err}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      } else {
+        detailHtml = `<div style="color:#e74c3c; font-weight: bold;">Bạn đọc chưa rõ lắm, bấm "Nghe mẫu" rồi thử lại nhé!</div>`;
+      }
+
+      $('pronounceFeedback').innerHTML = `
+        ${detailHtml}
+      `;
       if (typeof currentPronounceCallback === 'function') {
         currentPronounceCallback(false, diff.score);
       }
@@ -1275,10 +1308,12 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
 
     let i = m, j = n;
     const matchResults = {};
+    const matchedIndicesTtoS = {};
     while (i > 0 && j > 0) {
       const match = getMatchScore(tArr[i - 1], sArr[j - 1]);
       if (match > 0) {
         matchResults[i - 1] = match;
+        matchedIndicesTtoS[i - 1] = j - 1;
         i--;
         j--;
       } else if (dp[i - 1][j] >= dp[i][j - 1]) {
@@ -1307,7 +1342,65 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
     }
 
     const score = maxScorePoints > 0 ? Math.round((totalScorePoints / maxScorePoints) * 100) : 0;
-    return { html, score };
+
+    // Phân tích chi tiết lỗi phát âm
+    const errorDetails = [];
+    if (score < 80) {
+      const sMatched = Array(sArr.length).fill(false);
+      for (const tIdx in matchedIndicesTtoS) {
+        sMatched[matchedIndicesTtoS[tIdx]] = true;
+      }
+
+      const tToSMapping = {};
+      for (let k = 0; k < tArr.length; k++) {
+        const match = matchResults[k] || 0;
+        if (match === 0) {
+          let bestJ = -1;
+          let minDistance = Infinity;
+          for (let j = 0; j < sArr.length; j++) {
+            if (!sMatched[j]) {
+              const dist = Math.abs(k - j);
+              if (dist < minDistance && dist <= 2) {
+                minDistance = dist;
+                bestJ = j;
+              }
+            }
+          }
+          if (bestJ !== -1) {
+            tToSMapping[k] = bestJ;
+            sMatched[bestJ] = true;
+          }
+        }
+      }
+
+      for (let k = 0; k < tArr.length; k++) {
+        const match = matchResults[k] || 0;
+        const charT = tArr[k].char;
+        const pyT = tArr[k].pinyin || 'không rõ';
+
+        if (match === 1) {
+          const sIdx = matchedIndicesTtoS[k];
+          const charS = sArr[sIdx] ? sArr[sIdx].char : '';
+          const pyS = sArr[sIdx] ? (sArr[sIdx].pinyin || 'không rõ') : 'không rõ';
+          if (charS === charT) {
+            errorDetails.push(`Chữ <b style="color:var(--text-color, #fff); font-size: 1.05rem;">${esc(charT)}</b> (mẫu đọc là <span style="color:#2ecc71; font-weight:bold;">${esc(pyT)}</span>) bạn đọc sai thanh điệu thành <span style="color:var(--gold-2, #d4af37); font-weight:bold;">${esc(pyS)}</span>.`);
+          } else {
+            errorDetails.push(`Chữ <b style="color:var(--text-color, #fff); font-size: 1.05rem;">${esc(charT)}</b> (mẫu đọc là <span style="color:#2ecc71; font-weight:bold;">${esc(pyT)}</span>) bạn phát âm gần giống <span style="color:var(--gold-2, #d4af37); font-weight:bold;">${esc(pyS)}</span> (nhận diện thành "${esc(charS)}").`);
+          }
+        } else if (match === 0) {
+          if (k in tToSMapping) {
+            const sIdx = tToSMapping[k];
+            const charS = sArr[sIdx].char;
+            const pyS = sArr[sIdx].pinyin || 'không rõ';
+            errorDetails.push(`Chữ <b style="color:var(--text-color, #fff); font-size: 1.05rem;">${esc(charT)}</b> (mẫu đọc là <span style="color:#2ecc71; font-weight:bold;">${esc(pyT)}</span>) bạn phát âm sai thành <span style="color:#e74c3c; font-weight:bold;">${esc(pyS)}</span> (nhận diện thành "${esc(charS)}").`);
+          } else {
+            errorDetails.push(`Bạn đọc thiếu chữ <b style="color:var(--text-color, #fff); font-size: 1.05rem;">${esc(charT)}</b> (mẫu đọc là <span style="color:#2ecc71; font-weight:bold;">${esc(pyT)}</span>).`);
+          }
+        }
+      }
+    }
+
+    return { html, score, errorDetails };
   }
 
   // --- Các hàm Wrapper kết nối sang app.js ---

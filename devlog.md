@@ -133,10 +133,17 @@
   - `deploy/index.html` — Bump `aichat.js?v=19`, chuyển CDN pinyin-pro sang jsdelivr.
   - `deploy/sw.js` — Nâng cache lên `hochan-v21`.
 
+#### 9. Tự động phân tích chi tiết lỗi phát âm offline
+- **Mô tả:** Thay thế dòng thông báo lỗi đơn điệu "Bạn đọc chưa rõ lắm..." bằng mô tả chi tiết lỗi phát âm do thuật toán so khớp LCS tạo ra (nhận biết chữ đọc sai, chữ đọc thiếu, và chữ đọc sai thanh điệu dựa trên so sánh Pinyin). Điều này giúp học sinh biết chính xác mình sai ở đâu mà không cần tốn chi phí gọi AI, đồng thời giữ nguyên nút nhờ AI giáo viên phân tích sâu hơn.
+- **Files thay đổi:**
+  - `deploy/js/aichat.js` (BUMP v=20) — Cập nhật `getLcsDiff` thu thập và so khớp chỉ số lỗi, cập nhật `processPronounceResult` để render HTML chi tiết lỗi phát âm.
+  - `deploy/index.html` — Bump `aichat.js?v=20`.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v22`.
+
 ### 🔧 Cấu hình hiện tại
 - **API Key:** Lưu tại `localStorage`.
 - **Model mặc định:** `gemini-2.5-flash-lite` (và tự động fallback).
-- **CSS Cache:** `aichat.css?v=3`, `dashboard.css?v=1`, **JS Cache:** `js/core.js?v=3`, `js/db.js?v=1`, `js/auth.js?v=2`, `js/flashcard.js?v=1`, `js/vocab.js?v=1`, `js/quiz.js?v=1`, `js/game.js?v=1`, `js/passage.js?v=1`, `js/writer.js?v=2`, `js/dashboard.js?v=2`, `js/app_init.js?v=1`, `js/exam.js?v=17`, `js/aichat.js?v=19`.
+- **CSS Cache:** `aichat.css?v=3`, `dashboard.css?v=1`, **JS Cache:** `js/core.js?v=3`, `js/db.js?v=1`, `js/auth.js?v=2`, `js/flashcard.js?v=1`, `js/vocab.js?v=1`, `js/quiz.js?v=1`, `js/game.js?v=1`, `js/passage.js?v=1`, `js/writer.js?v=2`, `js/dashboard.js?v=2`, `js/app_init.js?v=1`, `js/exam.js?v=17`, `js/aichat.js?v=20`.
 
 ### 📋 Kế hoạch tiếp theo
 - [ ] Tích hợp tính năng AI hỗ trợ giáo viên chấm nhanh bài tự luận trong bài kiểm tra.
