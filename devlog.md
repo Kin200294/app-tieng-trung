@@ -95,10 +95,19 @@
   - Sửa logic bắt lỗi `onerror` trong `aichat.js` để hiển thị hướng dẫn chi tiết người dùng sử dụng trình duyệt chuẩn Safari/Chrome khi nhận được mã lỗi `aborted`.
   - Bump cache version trong `index.html` và `sw.js` (hochan-v17).
 
+#### 5. Tối ưu thuật toán chấm điểm phát âm bằng so khớp Pinyin và khoảng cách tương đồng Levenshtein
+- **Mô tả:** Khắc phục triệt để hiện tượng học sinh phát âm chuẩn nhưng thuật toán so sánh chữ Hán cũ báo sai (do chữ Hán đồng âm khác nghĩa, hoặc do máy nhận dạng lệch âm cuối như `ni` thành `nin`).
+- **Cách sửa:**
+  - Nâng cấp hàm `getLcsDiff` trong `aichat.js` chuyển so khớp từ chữ Hán thô sang so khớp Pinyin bằng thư viện `pinyin-pro`.
+  - Tích hợp **thuật toán khoảng cách Levenshtein (String Similarity)** đo độ tương đồng Pinyin không dấu. Nếu độ tương đồng >= 60% (như `ni` và `nin`), tính là **Khớp gần đúng** (partial match - hiển thị chữ màu vàng đất/cam và nhận 75% số điểm).
+  - Tự động nhận diện chữ đồng âm (Pinyin trùng nhau hoàn toàn) làm **Khớp hoàn toàn** (correct - màu xanh lá, nhận 100% số điểm).
+  - Bổ sung CSS cho class `.char-result.partial` trong `aichat.css` tương thích tốt ở cả 2 tông màu sáng/tối.
+  - Bump cache version trong `index.html` và `sw.js` (hochan-v18).
+
 ### 🔧 Cấu hình hiện tại
 - **API Key:** Lưu tại `localStorage`.
 - **Model mặc định:** `gemini-2.5-flash` (và tự động fallback).
-- **CSS Cache:** `aichat.css?v=2`, `dashboard.css?v=1`, **JS Cache:** `js/core.js?v=3`, `js/db.js?v=1`, `js/auth.js?v=2`, `js/flashcard.js?v=1`, `js/vocab.js?v=1`, `js/quiz.js?v=1`, `js/game.js?v=1`, `js/passage.js?v=1`, `js/writer.js?v=2`, `js/dashboard.js?v=2`, `js/app_init.js?v=1`, `js/exam.js?v=17`, `js/aichat.js?v=15`.
+- **CSS Cache:** `aichat.css?v=3`, `dashboard.css?v=1`, **JS Cache:** `js/core.js?v=3`, `js/db.js?v=1`, `js/auth.js?v=2`, `js/flashcard.js?v=1`, `js/vocab.js?v=1`, `js/quiz.js?v=1`, `js/game.js?v=1`, `js/passage.js?v=1`, `js/writer.js?v=2`, `js/dashboard.js?v=2`, `js/app_init.js?v=1`, `js/exam.js?v=17`, `js/aichat.js?v=16`.
 
 ### 📋 Kế hoạch tiếp theo
 - [ ] Tích hợp tính năng AI hỗ trợ giáo viên chấm nhanh bài tự luận trong bài kiểm tra.
