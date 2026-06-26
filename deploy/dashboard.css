@@ -1,0 +1,262 @@
+/* ============================================================
+   Học Chữ Hán - dashboard.css (Styles cho tab Thành viên & SRS Stats)
+   ============================================================ */
+
+/* 1. Khu vực thống kê SRS */
+.srs-section {
+  margin-top: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  animation: fadeIn 0.4s ease both;
+}
+
+.srs-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--gold-1);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 2. Thẻ Metrics */
+.srs-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.srs-metric-card {
+  padding: 12px 8px;
+  border-radius: 10px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.srs-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.srs-card-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.srs-card-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Biến thể màu sắc của Thẻ */
+.card-not-started {
+  border-color: rgba(154, 162, 177, 0.2);
+}
+.card-not-started .srs-card-value {
+  color: var(--muted);
+}
+
+.card-in-progress {
+  border-color: rgba(212, 175, 55, 0.2);
+  background: rgba(212, 175, 55, 0.03);
+}
+.card-in-progress .srs-card-value {
+  color: var(--gold-1);
+}
+
+.card-memorized {
+  border-color: rgba(62, 209, 138, 0.2);
+  background: rgba(62, 209, 138, 0.03);
+}
+.card-memorized .srs-card-value {
+  color: var(--green-1);
+}
+
+.card-due-today {
+  border-color: rgba(192, 57, 43, 0.3);
+  background: rgba(192, 57, 43, 0.04);
+}
+.card-due-today .srs-card-value {
+  color: #ff6b6b;
+}
+
+.card-due-tomorrow {
+  border-color: rgba(52, 152, 219, 0.3);
+  background: rgba(52, 152, 219, 0.04);
+}
+.card-due-tomorrow .srs-card-value {
+  color: #54a0ff;
+}
+
+/* 3. Biểu đồ thanh SRS */
+.srs-chart-container {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.srs-chart-header {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.srs-bars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.srs-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.srs-bar-label {
+  font-size: 0.8rem;
+  width: 90px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.srs-bar-track {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+}
+
+.srs-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.8s cubic-bezier(0.1, 0.8, 0.1, 1);
+  background: var(--muted);
+}
+
+.srs-bar-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  width: 50px;
+  text-align: right;
+  color: var(--text);
+}
+
+/* Màu thanh ứng với từng cấp độ SRS (Cấp 1 - Cấp 8) */
+.srs-bar-fill.lv1 { background: linear-gradient(90deg, #ff4d4d, #ff6b6b); }
+.srs-bar-fill.lv2 { background: linear-gradient(90deg, #f39c12, #f1c40f); }
+.srs-bar-fill.lv3 { background: linear-gradient(90deg, #f1c40f, #ffdd59); }
+.srs-bar-fill.lv4 { background: linear-gradient(90deg, #2ecc71, #26de81); }
+.srs-bar-fill.lv5 { background: linear-gradient(90deg, #27ae60, #20bf6b); }
+.srs-bar-fill.lv6 { background: linear-gradient(90deg, #0fbcf9, #05c46b); }
+.srs-bar-fill.lv7 { background: linear-gradient(90deg, #3498db, #2980b9); }
+.srs-bar-fill.lv8 { background: linear-gradient(90deg, #9b59b6, #8e44ad); }
+
+/* 4. LIGHT MODE OVERRIDES */
+body.light .srs-section {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+body.light .srs-metric-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+body.light .srs-metric-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+body.light .srs-chart-container {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+body.light .srs-bar-track {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+body.light .srs-card-label {
+  color: #718096;
+}
+
+/* Điều chỉnh màu text cho tương phản trong Light Mode */
+body.light .card-not-started .srs-card-value {
+  color: #718096;
+}
+
+body.light .card-in-progress {
+  background: rgba(212, 175, 55, 0.06);
+  border-color: rgba(212, 175, 55, 0.4);
+}
+body.light .card-in-progress .srs-card-value {
+  color: #a87900;
+}
+
+body.light .card-memorized {
+  background: rgba(31, 157, 99, 0.06);
+  border-color: rgba(31, 157, 99, 0.4);
+}
+body.light .card-memorized .srs-card-value {
+  color: #1e7e4e;
+}
+
+body.light .card-due-today {
+  background: rgba(192, 57, 43, 0.06);
+  border-color: rgba(192, 57, 43, 0.4);
+}
+body.light .card-due-today .srs-card-value {
+  color: #c0392b;
+}
+
+body.light .card-due-tomorrow {
+  background: rgba(41, 128, 185, 0.06);
+  border-color: rgba(41, 128, 185, 0.4);
+}
+body.light .card-due-tomorrow .srs-card-value {
+  color: #2980b9;
+}
+
+/* 5. Mobile Responsive */
+@media (max-width: 600px) {
+  .srs-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* Cho phép thẻ Due Today/Tomorrow hoặc một cái bất kỳ rộng full ở dòng cuối nếu lẻ */
+  .srs-metric-card:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+  .srs-section {
+    padding: 12px;
+  }
+  .srs-chart-container {
+    padding: 12px;
+  }
+  .srs-bar-label {
+    font-size: 0.75rem;
+    width: 75px;
+  }
+  .srs-bar-count {
+    font-size: 0.75rem;
+    width: 40px;
+  }
+}

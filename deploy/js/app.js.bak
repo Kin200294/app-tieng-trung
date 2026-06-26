@@ -1,0 +1,2906 @@
+(function () {
+// ===== Dữ liệu ===== items: [{h, p, m, known}]
+  let items = [];
+  let order = [];
+  let columns = 4;
+  let editingIndex = -1;
+  let searchQuery = '';
+  let frontMode = 'hanzi';
+  let flagOnly = false;   // chỉ hiện chữ đã đánh dấu lưu ý
+  // ===== Lazy loading cho lưới Flashcard =====
+  const GRID_CHUNK = 40;       // số thẻ render mỗi đợt
+  let gridView = [];           // mảng chỉ số items sau khi lọc
+  let gridRendered = 0;        // đã render bao nhiêu thẻ
+  let gridObserver = null;     // IntersectionObserver theo dõi sentinel
+  const STORAGE_KEY = 'hanzi-cards-v1';
+  const LESSON_KEY = 'hanzi-lessons-v1';
+  const PASSAGE_KEY = 'hanzi-passages-v1';
+  const LOCKED_LESSONS_KEY = 'hanzi-locked-lessons-v1';
+  let extraLessons = [];  // tên các bài học đã tạo (kể cả chưa có chữ)
+  let lockedLessons = []; // các bài học bị khoá
+  let passages = [];      // bài khóa: [{ s: "你 叫 什么 名字", m: "Bạn tên là gì?" }]
+  function savePassages() { localStorage.setItem(PASSAGE_KEY, JSON.stringify(passages)); schedulePush(); }
+  function saveLockedLessons() { localStorage.setItem(LOCKED_LESSONS_KEY, JSON.stringify(lockedLessons)); schedulePush(); }
+  // ===== Trạng thái đồng bộ đám mây =====
+  let db = null, lastVocabJson = '', pushTimer = null, sharedUnsub = null;
+  // Phần NỘI DUNG chung (chữ + bài + bài khóa + trạng thái khoá) — KHÔNG gồm tiến độ cá nhân
+  function vocabJson() {
+    return JSON.stringify({ vocab: items.map(it => ({ h: it.h, p: it.p, m: it.m, l: it.l || '', ex: it.ex || '' })), lessons: extraLessons, passages: passages, lockedLessons: lockedLessons });
+  }
+  function schedulePush() {
+    if (!db) return;
+    if (vocabJson() === lastVocabJson) return;   // từ vựng không đổi (vd chỉ đổi tiến độ) -> không đẩy
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushVocab, 700);
+  }
+  function saveLessons() { localStorage.setItem(LESSON_KEY, JSON.stringify(extraLessons)); schedulePush(); }
+  // Hợp nhất bài học từ chữ + bài học tự tạo
+  function allLessons() {
+    const set = new Set(extraLessons);
+    items.forEach(it => { if (it.l) set.add(it.l); });
+    return [...set].sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
+  }
+  function visibleLessons() {
+    const isTeacher = document.body.classList.contains('role-teacher');
+    if (isTeacher) return allLessons();
+    return allLessons().filter(l => !lockedLessons.includes(l));
+  }
+
+  const $ = id => document.getElementById(id);
+  const inHanzi = $('inHanzi'), inPinyin = $('inPinyin'), inMeaning = $('inMeaning'), inExample = $('inExample'), inLessonSelect = $('inLessonSelect');
+  const addBtn = $('addBtn'), clearBtn = $('clearBtn'), listEl = $('list');
+  const grid = $('grid'), colSelect = $('colSelect'), frontSelect = $('frontSelect'), lessonFilter = $('lessonFilter');
+  const shuffleBtn = $('shuffleBtn'), flipAllBtn = $('flipAllBtn'), countEl = $('count');
+  const flagFilterBtn = $('flagFilterBtn');   // nút "Chữ lưu ý" trong hàng điều khiển Học
+  if (flagFilterBtn) flagFilterBtn.addEventListener('click', () => {
+    flagOnly = !flagOnly;
+    flagFilterBtn.classList.toggle('active', flagOnly);
+    renderGrid();
+  });
+
+  // ===== Event Delegation cho lưới Flashcard =====
+  // 1 listener duy nhất trên #grid thay cho hàng trăm listener riêng lẻ
+  grid.addEventListener('click', (e) => {
+    const card = e.target.closest('.card');
+    if (!card) return;
+    const idx = Number(card.dataset.idx);
+    const it = items[idx];
+    if (!it) return;
+
+    // Nút loa — nghe phát âm
+    if (e.target.closest('.spk-btn')) {
+      speak(it.h);
+      return;
+    }
+    // Nút lưu ý — đánh dấu/bỏ đánh dấu
+    if (e.target.closest('.flag-btn')) {
+      it.flag = !it.flag;
+      save();
+      card.querySelector('.flag-btn').classList.toggle('on', it.flag);
+      card.classList.toggle('flagged', it.flag);
+      flagFilterBtn.textContent = `⚑ Chữ lưu ý (${items.filter(x => x.flag).length})`;
+      if (flagOnly && !it.flag) renderGrid();
+      return;
+    }
+    // Nút luyện đọc phát âm
+    if (e.target.closest('.read-btn')) {
+      if (window.HanziUI && typeof window.HanziUI.openPronounceModal === 'function') {
+        window.HanziUI.openPronounceModal(it.h, it.p, it.m, (success) => {
+          scheduleItem(it, success);
+          save();
+          renderGrid();
+        });
+      } else {
+        showAlert('Tính năng Luyện đọc chưa sẵn sàng.');
+      }
+      return;
+    }
+    // Nút tập viết chữ
+    if (e.target.closest('.write-btn')) {
+      openWriteModal(it.h);
+      return;
+    }
+    // Click vào thẻ → lật
+    card.classList.toggle('flipped');
+    if (card.classList.contains('flipped')) {
+      speak(it.h);
+      popPinyin(card.querySelector('.back-pinyin'));
+    }
+  });
+  const searchInput = $('searchInput'), manageLessonFilter = $('manageLessonFilter');
+  const importCsvBtnWrapper = $('importCsvBtnWrapper'), importCsvFile = $('importCsvFile');
+  const downloadTemplateBtn = $('downloadTemplateBtn');
+  const exportBtn = $('exportBtn'), importBtn = $('importBtn'), importFile = $('importFile');
+
+  // ===== Lưu / tải =====
+  function updateLessonFilter() {
+    const lessons = visibleLessons();
+    const options = '<option value="all">Tất cả bài học</option>' +
+      lessons.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+    
+    const filters = [$('lessonFilter'), $('quizLessonFilter'), $('gameLessonFilter'), $('manageLessonFilter')];
+    filters.forEach(el => {
+      if (!el) return;
+      const current = el.value;
+      el.innerHTML = options;
+      if (current === 'all' || lessons.includes(current)) el.value = current;
+      else el.value = 'all';
+    });
+
+    // Dropdown chọn bài ở trang Thêm chữ
+    if (inLessonSelect) {
+      const cur = inLessonSelect.value;
+      inLessonSelect.innerHTML =
+        '<option value="">— Chưa gán bài —</option>' +
+        allLessons().map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('') +
+        '<option value="__new__">+ Tạo bài mới…</option>';
+      if (cur && cur !== '__new__' && allLessons().includes(cur)) inLessonSelect.value = cur;
+      else inLessonSelect.value = '';
+    }
+  }
+
+  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); schedulePush(); if (typeof scheduleProgressPush === 'function') scheduleProgressPush(); }
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (Array.isArray(data)) items = data.map(normalizeItem);
+    } catch (e) {}
+    try {
+      const ls = JSON.parse(localStorage.getItem(LESSON_KEY));
+      if (Array.isArray(ls)) extraLessons = ls.filter(Boolean);
+    } catch (e) {}
+    try {
+      const ps = JSON.parse(localStorage.getItem(PASSAGE_KEY));
+      if (Array.isArray(ps)) passages = ps;
+    } catch (e) {}
+    try {
+      const lls = JSON.parse(localStorage.getItem(LOCKED_LESSONS_KEY));
+      if (Array.isArray(lls)) lockedLessons = lls.filter(Boolean);
+    } catch (e) {}
+    rebuildOrder();
+    updateLessonFilter();
+  }
+
+  function showModal(msg, buttons) {
+    const modal = $('confirmModal');
+    const msgEl = $('confirmMsg');
+    const btnsEl = modal ? modal.querySelector('.modal-btns') : null;
+
+    if (!modal || !msgEl || !btnsEl) {
+      if (buttons.length === 1) { alert(msg); if(buttons[0].onClick) buttons[0].onClick(); }
+      else if (buttons.length === 2) {
+        if (confirm(msg)) { if(buttons[1].onClick) buttons[1].onClick(); }
+        else { if(buttons[0].onClick) buttons[0].onClick(); }
+      } else {
+        if (confirm(msg + '\n\nOK = ' + (buttons[2] ? buttons[2].text : '') + '\nCancel = ' + (buttons[1] ? buttons[1].text : ''))) {
+           if(buttons[2] && buttons[2].onClick) buttons[2].onClick();
+        } else {
+           if(buttons[1] && buttons[1].onClick) buttons[1].onClick();
+        }
+      }
+      return;
+    }
+
+    msgEl.innerHTML = escapeHtml(msg).replace(/\n/g, '<br>');
+    btnsEl.innerHTML = '';
+    
+    const close = () => modal.classList.remove('active');
+
+    buttons.forEach(b => {
+      const btn = document.createElement('button');
+      btn.className = b.className || 'btn-cancel';
+      btn.textContent = b.text;
+      btn.onclick = () => {
+        close();
+        if (b.onClick) b.onClick();
+      };
+      btnsEl.appendChild(btn);
+    });
+
+    modal.classList.add('active');
+  }
+
+  function showAlert(msg, onOk) {
+    showModal(msg, [{ text: 'OK', className: 'btn-gold', onClick: onOk }]);
+  }
+
+  function showConfirm(msg, onYes) {
+    showModal(msg, [
+      { text: 'Không', className: 'btn-cancel' },
+      { text: 'Có', className: 'btn-danger', onClick: onYes }
+    ]);
+  }
+  // Cho các file khác (exam.js, aichat.js) dùng chung cửa sổ popup đẹp và các tiện ích
+  window.HanziUI = { 
+    alert: showAlert, 
+    confirm: showConfirm, 
+    modal: showModal,
+    speak: speak,
+    addPoints: addPoints,
+    colorPinyin: colorPinyin
+  };
+
+  function normalizeItem(o) {
+    const level = Number.isFinite(o.level) ? o.level : (o.known ? 4 : 0);
+    const due = Number.isFinite(o.due) ? o.due : 0;
+    return {
+      h: (o.h || '').toString(), p: (o.p || '').toString(), m: (o.m || '').toString(), l: formatLesson((o.l || '').toString()),
+      ex: (o.ex || '').toString(),
+      level: level, due: due, known: level >= 4, flag: !!o.flag, ok: Number.isFinite(o.ok) ? o.ok : 0
+    };
+  }
+  function rebuildOrder() { order = items.map((_, i) => i); }
+
+  // ===== Ôn theo lịch (SRS) =====
+  const DAY = 86400000;
+  const INTERVAL_DAYS = [0, 1, 2, 4, 8, 16, 30, 60, 120];  // theo cấp độ
+  function scheduleItem(it, correct) {
+    if (correct) {
+      it.level = Math.min((it.level || 0) + 1, INTERVAL_DAYS.length - 1);
+      it.ok = (it.ok || 0) + 1;
+      if (it.flag && it.ok >= 2) it.flag = false;   // đúng 2 lần liên tiếp -> tự gỡ cờ
+    } else {
+      it.level = 0; it.flag = true; it.ok = 0;       // sai / chưa thuộc -> gắn cờ "lưu ý"
+    }
+    it.due = Date.now() + (correct ? INTERVAL_DAYS[it.level] * DAY : 10 * 60000); // sai: ôn lại sau 10 phút
+    it.known = it.level >= 4;
+  }
+  function isDue(it) { return (it.due || 0) <= Date.now(); }
+  function dueCount() { return items.filter(isDue).length; }
+
+  // ===== Tô màu pinyin theo thanh điệu =====
+  const TONE_MAP = {};
+  [['āēīōūǖ',1],['áéíóúǘ',2],['ǎěǐǒǔǚ',3],['àèìòùǜ',4]].forEach(([chars, t]) => {
+    for (const c of chars) { TONE_MAP[c] = t; TONE_MAP[c.toUpperCase()] = t; }
+  });
+  function toneOf(syllable) {
+    for (const ch of syllable) if (TONE_MAP[ch]) return TONE_MAP[ch];
+    return 5; // không dấu = thanh nhẹ
+  }
+  function colorPinyin(pinyin) {
+    if (!pinyin) return '';
+    // tách giữ lại dấu cách/ngăn cách
+    return pinyin.split(/(\s+)/).map(tok => {
+      if (/^\s+$/.test(tok) || !tok) return escapeHtml(tok);
+      return `<span class="t${toneOf(tok)}">${escapeHtml(tok)}</span>`;
+    }).join('');
+  }
+
+  // ===== Chuyển trang =====
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      searchInput.value = '';
+      searchQuery = '';
+      if (tab.dataset.page === 'add') renderList();
+
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      $('page-' + tab.dataset.page).classList.add('active');
+      if (tab.dataset.page === 'learn') {
+        flagOnly = false;   // vào trang Học -> xem tất cả (bỏ lọc lưu ý)
+        if (flagFilterBtn) flagFilterBtn.classList.remove('active');
+        renderGrid();
+      }
+      if (tab.dataset.page !== 'quiz') { resetQuiz(); }
+      if (tab.dataset.page === 'quiz') { resetQuiz(); updateQuizStat(); renderQuiz(); }
+      if (tab.dataset.page === 'lessons') renderLessonsPage();
+      if (tab.dataset.page === 'members') renderMembersPage();
+      if (tab.dataset.page === 'classDiff') renderClassDiffPage();
+      if (tab.dataset.page === 'leaderboard') renderLeaderboardPage();
+      if (tab.dataset.page === 'passage') renderPassageExercise();
+      if (tab.dataset.page === 'passageEdit') renderPassageEdit();
+      if (tab.dataset.page === 'game') {
+        resetGame(); gameStartScreen();   // vào trò chơi -> luôn bắt đầu từ màn hình chờ
+      } else if (gameActive) {
+        resetGame(); gameStartScreen();   // rời trò chơi -> thoát game
+      }
+    });
+  });
+  // Ẩn cửa sổ/đổi tab trình duyệt -> thoát game
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && gameActive) { resetGame(); gameStartScreen(); }
+  });
+
+  // ===== Trang Thêm: danh sách =====
+  function removeTones(str) {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function formatLesson(val) {
+    if (!val) return '';
+    let s = val.trim().replace(/\s+/g, ' '); // xóa khoảng trắng thừa
+    if (/^\d+$/.test(s)) return 'Bài ' + s;   // tự thêm chữ "Bài" nếu chỉ gõ số
+    return s;
+  }
+
+  function renderList() {
+    listEl.innerHTML = '';
+    const head = document.querySelector('.list-head');
+    if (items.length === 0) {
+      if (head) head.style.display = 'none';
+      listEl.innerHTML = '<p class="empty-msg" style="padding:20px 0;">Chưa có chữ nào.</p>';
+      return;
+    }
+    if (head) head.style.display = '';
+
+    const q = searchQuery.trim().toLowerCase();
+    const qNoTones = removeTones(q);
+    const targetLesson = manageLessonFilter ? manageLessonFilter.value : 'all';
+    
+    // Gom các chữ theo lọc/tìm kiếm rồi sắp xếp theo BÀI HỌC (giữ chỉ số gốc để Sửa/Xoá)
+    const entries = [];
+    items.forEach((it, i) => {
+      if (targetLesson !== 'all' && it.l !== targetLesson) return;
+      const combined = (it.h + ' ' + it.p + ' ' + it.m).toLowerCase();
+      if (q && !(combined.includes(q) || removeTones(combined).includes(qNoTones))) return;
+      entries.push({ it, i });
+    });
+    // Sắp theo tên bài (số đúng thứ tự); chữ chưa có bài xếp cuối
+    entries.sort((a, b) =>
+      (a.it.l || '').localeCompare(b.it.l || '', 'vi', { numeric: true })
+    );
+
+    if (entries.length === 0) {
+      listEl.innerHTML = '<p class="empty-msg" style="padding:20px 0;">Không tìm thấy chữ nào khớp “' + escapeHtml(searchQuery) + '”.</p>';
+      return;
+    }
+
+    let renderedCount = 0;
+    function renderNextChunk() {
+      const frag = document.createDocumentFragment();
+      const chunk = entries.slice(renderedCount, renderedCount + 100);
+      chunk.forEach(e => frag.appendChild(buildRow(e.it, e.i)));
+      listEl.appendChild(frag);
+      renderedCount += chunk.length;
+
+      if (renderedCount < entries.length) {
+        const btnContainer = document.createElement('div');
+        btnContainer.style.textAlign = 'center';
+        btnContainer.style.padding = '20px 0';
+        
+        const btn = document.createElement('button');
+        btn.className = 'btn-gold';
+        btn.textContent = `Tải thêm chữ (${renderedCount} / ${entries.length})`;
+        btn.onclick = () => { btnContainer.remove(); renderNextChunk(); };
+        
+        btnContainer.appendChild(btn);
+        listEl.appendChild(btnContainer);
+      }
+    }
+    
+    renderNextChunk();
+  }
+
+  function addLessonPrompt() {
+    showPromptModal('Nhập tên bài học mới:', '', (name) => {
+      if (!name || !name.trim()) return;
+      const finalName = formatLesson(name.trim());
+      if (allLessons().includes(finalName)) { showAlert(`Bài học "${finalName}" đã tồn tại.`); return; }
+      extraLessons.push(finalName);
+      saveLessons(); updateLessonFilter(); renderLessonsPage();
+      showAlert(`Đã tạo bài học "${finalName}"`);
+    });
+  }
+  if ($('addLessonBtn')) $('addLessonBtn').onclick = addLessonPrompt;
+
+  function renderLessonsPage() {
+    const listEl = $('lessonsList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const lessonCounts = {};
+    items.forEach(it => {
+      const l = it.l;
+      if (l) lessonCounts[l] = (lessonCounts[l] || 0) + 1;
+    });
+
+    const lessons = allLessons();
+    if (lessons.length === 0) {
+      const msg = document.createElement('p');
+      msg.className = 'empty-msg';
+      msg.style.padding = '20px 0';
+      msg.textContent = 'Chưa có bài học nào. Bấm “+ Thêm bài học” để tạo.';
+      listEl.appendChild(msg);
+      return;
+    }
+
+    lessons.forEach(l => {
+      const count = lessonCounts[l] || 0;
+      const row = document.createElement('div');
+      row.className = 'lesson-mg-row';
+      
+      const info = document.createElement('div');
+      info.className = 'lesson-mg-info';
+      info.innerHTML = `<div class="lesson-mg-name">${escapeHtml(l)}</div><div class="lesson-mg-count">${count} chữ</div>`;
+      
+      const actions = document.createElement('div');
+      actions.className = 'lesson-mg-actions';
+      
+      const isLocked = lockedLessons.includes(l);
+      const btnLock = document.createElement('button');
+      btnLock.className = 'btn-cancel';
+      btnLock.textContent = isLocked ? '🔒 Đã khoá' : '🔓 Khoá bài';
+      if (isLocked) btnLock.style.background = '#e74c3c';
+      if (isLocked) btnLock.style.color = '#fff';
+      btnLock.onclick = () => {
+        if (isLocked) {
+          lockedLessons = lockedLessons.filter(x => x !== l);
+          showAlert(`Đã mở khoá bài học "${l}"`);
+        } else {
+          lockedLessons.push(l);
+          showAlert(`Đã khoá bài học "${l}"`);
+        }
+        saveLockedLessons();
+        renderLessonsPage();
+      };
+      
+      const btnView = document.createElement('button');
+      btnView.className = 'btn-gold';
+      btnView.textContent = 'Xem từ';
+      btnView.onclick = () => {
+        if (manageLessonFilter) manageLessonFilter.value = l;
+        searchInput.value = '';
+        searchQuery = '';
+        renderList();
+        document.querySelector('.tab[data-page="add"]').click();
+      };
+      
+      const btnEdit = document.createElement('button');
+      btnEdit.className = 'btn-cancel';
+      btnEdit.textContent = 'Đổi tên';
+      btnEdit.onclick = () => {
+        showPromptModal('Nhập tên mới cho bài học:', l, (newName) => {
+          if (newName && newName.trim() && newName.trim() !== l) {
+            const finalName = formatLesson(newName.trim());
+            items.forEach(it => { if (it.l === l) it.l = finalName; });
+            extraLessons = extraLessons.map(x => x === l ? finalName : x);
+            save(); saveLessons(); updateLessonFilter(); renderLessonsPage(); renderList();
+            showAlert(`Đã đổi tên bài học thành "${finalName}"`);
+          }
+        });
+      };
+      
+      const btnDel = document.createElement('button');
+      btnDel.className = 'btn-danger';
+      btnDel.textContent = 'Xoá';
+      btnDel.onclick = () => {
+        showConfirm(`Bạn có chắc chắn muốn xoá bài học "${l}" không?\n(Các chữ thuộc bài này sẽ không bị xoá, chỉ mất nhãn bài học)`, () => {
+          items.forEach(it => { if (it.l === l) it.l = ''; });
+          extraLessons = extraLessons.filter(x => x !== l);
+          save(); saveLessons(); updateLessonFilter(); renderLessonsPage(); renderList();
+          showAlert(`Đã xoá bài học "${l}"`);
+        });
+      };
+      
+      actions.append(btnLock, btnView, btnEdit, btnDel);
+      row.append(info, actions);
+      listEl.appendChild(row);
+    });
+  }
+
+  function buildRow(it, i) {
+    const row = document.createElement('div');
+    row.className = 'list-item';
+    row.style.animationDelay = Math.min(i * 0.03, 0.4) + 's';
+
+    if (i === editingIndex) {
+      row.classList.add('editing');
+      const efH = mkInput('ef-input ef-hanzi', it.h, 'Chữ Hán');
+      const efP = mkInput('ef-input ef-pinyin', it.p, 'Pinyin');
+      const efM = mkInput('ef-input ef-meaning', it.m, 'Nghĩa');
+      const efEx = mkInput('ef-input ef-example', it.ex || '', 'Câu ví dụ (không bắt buộc)');
+      // Dropdown chọn/dời bài học
+      const efL = document.createElement('select');
+      efL.className = 'ef-input ef-lesson';
+      const lessonOptions = () => '<option value="">— Chưa gán bài —</option>' +
+        allLessons().map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('') +
+        '<option value="__new__">+ Tạo bài mới…</option>';
+      efL.innerHTML = lessonOptions();
+      efL.value = (it.l && allLessons().includes(it.l)) ? it.l : '';
+      efL.addEventListener('change', () => {
+        if (efL.value !== '__new__') return;
+        showPromptModal('Nhập tên bài học mới:', '', (name) => {
+          const finalName = formatLesson((name || '').trim());
+          if (!finalName) { efL.value = it.l || ''; return; }
+          if (!allLessons().includes(finalName)) { extraLessons.push(finalName); saveLessons(); updateLessonFilter(); }
+          efL.innerHTML = lessonOptions();
+          efL.value = finalName;
+        });
+        efL.value = it.l || '';
+      });
+
+      const saveEdit = () => {
+        const h = efH.value.trim();
+        if (!h) { efH.focus(); return; }
+        const lesson = efL.value === '__new__' ? (it.l || '') : efL.value;
+        Object.assign(items[i], { h: h, p: efP.value.trim(), m: efM.value.trim(), ex: efEx.value.trim(), l: lesson });
+        editingIndex = -1;
+        searchInput.value = '';
+        searchQuery = '';
+        save(); renderList(); updateLessonFilter();
+      };
+      efM.addEventListener('keydown', e => { if (e.key === 'Enter') saveEdit(); });
+      const actions = document.createElement('div');
+      actions.className = 'li-actions';
+      actions.appendChild(mkBtn('li-save', 'Lưu', saveEdit));
+      actions.appendChild(mkBtn('li-cancel', 'Huỷ', () => { editingIndex = -1; renderList(); }));
+      efEx.style.gridColumn = '1 / -1';   // câu ví dụ chiếm trọn 1 hàng dưới
+      row.append(efH, efP, efM, efL, actions, efEx);
+      setTimeout(() => efH.focus(), 0);
+    } else {
+      const cH = document.createElement('div');
+      cH.className = 'li-hanzi';
+      cH.innerHTML = (it.known ? '<span class="known-dot" title="Đã thuộc">✓</span> ' : '') + escapeHtml(it.h);
+
+      const cP = document.createElement('div');
+      cP.className = 'li-pinyin';
+      cP.innerHTML = colorPinyin(it.p) || '<span style="color:#888">—</span>';
+
+      const cM = document.createElement('div');
+      cM.className = 'li-meaning';
+      cM.innerHTML = escapeHtml(it.m) || '<span style="color:#777">(chưa có nghĩa)</span>';
+
+      const cL = document.createElement('div');
+      cL.className = 'li-lesson';
+      cL.textContent = it.l || '';
+
+      const actions = document.createElement('div');
+      actions.className = 'li-actions';
+      actions.appendChild(mkBtn('li-edit', 'Sửa', () => { editingIndex = i; renderList(); }));
+      actions.appendChild(mkBtn('li-del', 'Xoá', () => {
+        showConfirm(`Bạn có muốn xoá chữ "${it.h}" không?`, () => {
+          items.splice(i, 1);
+          if (editingIndex === i) editingIndex = -1;
+          rebuildOrder(); save(); renderList(); updateLessonFilter();
+        });
+      }));
+      row.append(cH, cP, cM, cL, actions);
+    }
+    return row;
+  }
+  function mkInput(cls, val, ph) { const el = document.createElement('input'); el.className = cls; el.value = val; el.placeholder = ph; return el; }
+  function mkBtn(cls, txt, fn) { const b = document.createElement('button'); b.className = cls; b.textContent = txt; b.addEventListener('click', fn); return b; }
+
+  function addItem() {
+    const h = inHanzi.value.trim();
+    if (!h) { inHanzi.focus(); return; }
+    if (items.some(it => it.h === h)) {
+      showAlert('Chữ này đã có vui lòng kiểm tra lại');
+      return;
+    }
+    const lesson = (inLessonSelect && inLessonSelect.value !== '__new__') ? inLessonSelect.value : '';
+    items.push({ h: h, p: inPinyin.value.trim(), m: inMeaning.value.trim(), ex: inExample ? inExample.value.trim() : '', l: lesson, known: false });
+    rebuildOrder(); save();
+    const keepLesson = inLessonSelect ? inLessonSelect.value : '';   // giữ bài đang chọn để thêm nhanh nhiều chữ
+    renderList(); updateLessonFilter();
+    if (inLessonSelect) inLessonSelect.value = (keepLesson && keepLesson !== '__new__') ? keepLesson : '';
+    inHanzi.value = inPinyin.value = inMeaning.value = '';
+    if (inExample) inExample.value = '';
+    inHanzi.focus();
+  }
+  // Chọn "+ Tạo bài mới…" trong dropdown -> hỏi tên rồi chọn luôn
+  if (inLessonSelect) {
+    inLessonSelect.addEventListener('change', () => {
+      if (inLessonSelect.value !== '__new__') return;
+      showPromptModal('Nhập tên bài học mới:', '', (name) => {
+        const finalName = formatLesson((name || '').trim());
+        if (!finalName) { inLessonSelect.value = ''; return; }
+        if (!allLessons().includes(finalName)) { extraLessons.push(finalName); saveLessons(); }
+        updateLessonFilter();
+        inLessonSelect.value = finalName;
+      });
+      inLessonSelect.value = '';   // tạm về rỗng trong khi chờ nhập
+    });
+  }
+  addBtn.addEventListener('click', addItem);
+  inHanzi.addEventListener('keydown', e => { if (e.key === 'Enter') inPinyin.focus(); });
+  inHanzi.addEventListener('input', () => {
+    if (window.pinyinPro && inHanzi.value.trim()) {
+      inPinyin.value = window.pinyinPro.pinyin(inHanzi.value.trim());
+    } else if (!inHanzi.value.trim()) {
+      inPinyin.value = '';
+    }
+  });
+  inPinyin.addEventListener('keydown', e => { if (e.key === 'Enter') inMeaning.focus(); });
+  inMeaning.addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+
+  clearBtn.addEventListener('click', () => {
+    if (items.length === 0) return;
+    showConfirm('Bạn có chắc chắn muốn xoá toàn bộ danh sách chữ không?', () => {
+      items = [];
+      rebuildOrder(); save(); renderList(); updateLessonFilter();
+    });
+  });
+
+  searchInput.addEventListener('input', () => { searchQuery = searchInput.value; renderList(); });
+  if (manageLessonFilter) manageLessonFilter.addEventListener('change', renderList);
+
+  // ===== Nhập từ CSV/Excel =====
+  function parseCsvLine(text) {
+    // Excel tiếng Việt hay lưu bằng dấu ';' -> tự nhận dấu phân cách phổ biến nhất ngoài ngoặc kép
+    const delim = (text.split(';').length > text.split(',').length) ? ';' : ',';
+    let ret = [], p = '', inQuote = false;
+    for (let i = 0; i < text.length; i++) {
+      let c = text[i];
+      if (c === '"' && text[i+1] === '"') { p += '"'; i++; }
+      else if (c === '"') { inQuote = !inQuote; }
+      else if (c === delim && !inQuote) { ret.push(p.trim()); p = ''; }
+      else { p += c; }
+    }
+    ret.push(p.trim());
+    return ret;
+  }
+  
+  if (importCsvBtnWrapper) {
+    importCsvBtnWrapper.addEventListener('click', () => importCsvFile.click());
+    importCsvFile.addEventListener('change', () => {
+      const file = importCsvFile.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result;
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        let added = 0, dupCount = 0;
+        
+        if (lines.length > 0) {
+          const firstLine = lines[0].toLowerCase();
+          if ((firstLine.includes('chữ') && firstLine.includes('nghĩa')) || firstLine.includes('pinyin')) {
+            lines.shift();
+          }
+        }
+
+        lines.forEach(line => {
+          const parts = line.includes('\t') ? line.split('\t').map(s => s.trim()) : parseCsvLine(line);
+          const h = parts[0];
+          if (!h) return;
+          if (items.some(it => it.h === h)) {
+            dupCount++;
+            return;
+          }
+          items.push({ h: h, p: parts[1] || '', m: parts[2] || '', l: formatLesson(parts[3] || ''), ex: parts[4] || '', known: false });
+          added++;
+        });
+        
+        if (added) { rebuildOrder(); save(); renderList(); updateLessonFilter(); }
+        importCsvFile.value = '';
+        let msg = added ? ('Đã thêm thành công ' + added + ' chữ từ file Excel.') : 'Không có chữ mới nào được thêm.';
+        if (dupCount > 0) msg += '\nĐã bỏ qua ' + dupCount + ' chữ bị trùng (đã tồn tại).';
+        showAlert(msg);
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  if (downloadTemplateBtn) {
+    downloadTemplateBtn.addEventListener('click', () => {
+      const csvContent = '\uFEFFChữ,Pinyin,Nghĩa,Buổi học,Câu ví dụ\n你好,nǐ hǎo,xin chào,Bài 1,你好吗？\n谢谢,xièxie,cảm ơn,Bài 1,\n';
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'mau_nhap_lieu.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  // =====================
+  // BẢNG VÀNG - LEADERBOARD
+  // =====================
+  function renderLeaderboardPage() {
+    const stage = $('leaderboardStage');
+    if (!stage) return;
+    stage.innerHTML = '<div style="text-align:center; padding:20px;">Đang tải dữ liệu... ⏳</div>';
+    
+    if (typeof db === 'undefined' || !db) {
+      stage.innerHTML = '<div style="text-align:center; color:red;">Lỗi kết nối cơ sở dữ liệu.</div>';
+      return;
+    }
+
+    db.collection('members').orderBy('score', 'desc').limit(10).get().then(snap => {
+      if (snap.empty) {
+        stage.innerHTML = '<div style="text-align:center; color:var(--muted);">Chưa có dữ liệu bảng vàng.</div>';
+        return;
+      }
+      
+      const members = [];
+      snap.forEach(doc => members.push(doc.data()));
+      
+      // Top 3 Podium
+      let podiumHtml = '<div class="lb-podium">';
+      // Order in podium: 2nd, 1st, 3rd for visual balance
+      const top3Order = [1, 0, 2];
+      top3Order.forEach(idx => {
+        if (members[idx]) {
+          const m = members[idx];
+          const rank = idx + 1;
+          const avatar = rank === 1 ? '👑' : (rank === 2 ? '🥈' : '🥉');
+          podiumHtml += `
+            <div class="lb-podium-item rank-${rank}">
+              ${rank === 1 ? '<div class="lb-crown">👑</div>' : ''}
+              <div class="lb-avatar">${avatar}</div>
+              <div class="lb-name">${escapeHtml(m.name)}</div>
+              <div class="lb-score">${m.score || 0} đ</div>
+            </div>
+          `;
+        } else {
+          // Empty spot to keep layout stable
+          podiumHtml += `<div class="lb-podium-item" style="background:transparent; border:none; box-shadow:none;"></div>`;
+        }
+      });
+      podiumHtml += '</div>';
+
+      // Top 4-10 List
+      let listHtml = '<div class="lb-list">';
+      for (let i = 3; i < members.length; i++) {
+        const m = members[i];
+        listHtml += `
+          <div class="lb-row">
+            <div class="lb-row-rank">#${i + 1}</div>
+            <div class="lb-row-name">${escapeHtml(m.name)}</div>
+            <div class="lb-row-score">${m.score || 0} đ</div>
+          </div>
+        `;
+      }
+      listHtml += '</div>';
+
+      stage.innerHTML = podiumHtml + listHtml;
+    }).catch(err => {
+      console.log('Lỗi tải Bảng vàng:', err);
+      stage.innerHTML = '<div style="text-align:center; color:red;">Lỗi khi tải bảng vàng.</div>';
+    });
+  }
+
+  // =====================
+  // EXCEL & IO
+  // =====================
+  // ===== Xuất / Nhập file =====
+  exportBtn.addEventListener('click', () => {
+    if (items.length === 0) { showAlert('Chưa có dữ liệu để xuất.'); return; }
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const stamp = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`; // DD-MM-YYYY
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hoc-chu-han-${stamp}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  importBtn.addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', () => {
+    const file = importFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!Array.isArray(data)) throw 0;
+        const incoming = data.map(normalizeItem).filter(x => x.h);
+        if (!incoming.length) { showAlert('File không có dữ liệu hợp lệ.'); return; }
+        
+        showModal(`Đã tìm thấy ${incoming.length} chữ.\nBạn muốn thay thế danh sách hiện tại hay gộp thêm vào?`, [
+          { text: 'Hủy bỏ', className: 'btn-cancel' },
+          { text: 'Gộp thêm', className: 'btn-gold', onClick: () => {
+              let added = 0;
+              incoming.forEach(it => {
+                if (!items.some(exist => exist.h === it.h)) {
+                  items.push(it);
+                  added++;
+                }
+              });
+              const skipped = incoming.length - added;
+              finishImport(`Đã gộp thêm ${added} chữ mới.${skipped > 0 ? ` (Bỏ qua ${skipped} chữ đã có)` : ''}\nTổng cộng danh sách: ${items.length} chữ.`);
+          }},
+          { text: 'Thay thế', className: 'btn-danger', onClick: () => {
+              items = incoming;
+              finishImport(`Đã thay thế toàn bộ!\nTổng cộng danh sách: ${items.length} chữ.`);
+          }}
+        ]);
+
+        function finishImport(msg) {
+          rebuildOrder(); save(); renderList(); updateLessonFilter();
+          showAlert(msg);
+        }
+      } catch (e) { showAlert('Không đọc được file. Hãy chọn đúng file .json đã xuất từ app này.'); }
+      importFile.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  // ===== Trang Học: lưới thẻ lật (Lazy Loading) =====
+
+  // Tạo DOM cho 1 thẻ flashcard (chỉ tạo DOM, không gán event — dùng delegation trên #grid)
+  function buildFlashcard(it, idx, pos) {
+    const card = document.createElement('div');
+    card.className = 'card' + (it.flag ? ' flagged' : '');
+    card.dataset.idx = idx;   // để delegation tra cứu items[idx]
+    // Chỉ đặt animation delay cho chunk đầu tiên (thẻ trong viewport)
+    if (pos < GRID_CHUNK) {
+      card.style.animationDelay = Math.min(pos * 0.05, 0.6) + 's';
+    }
+    const inner = document.createElement('div');
+    inner.className = 'card-inner';
+
+    const front = document.createElement('div');
+    front.className = 'face face-front';
+    const back = document.createElement('div');
+    back.className = 'face face-back';
+
+    if (frontMode === 'meaning') {
+      front.classList.add('mode-meaning');
+      front.textContent = it.m || '(chưa có nghĩa)';
+      back.innerHTML = `<div class="back-hanzi">${escapeHtml(it.h)}</div>` +
+                       (it.p ? `<div class="back-pinyin">${colorPinyin(it.p)}</div>` : '');
+    } else {
+      const len = [...it.h].length;
+      front.classList.add('len-' + Math.min(len, 4));
+      front.textContent = it.h;
+      if (it.p || it.m) {
+        back.innerHTML = (it.p ? `<div class="back-pinyin">${colorPinyin(it.p)}</div>` : '') +
+                         (it.m ? `<div class="back-meaning">${escapeHtml(it.m)}</div>` : '') +
+                         (it.ex ? `<div class="back-ex">${escapeHtml(it.ex)}</div>` : '');
+      } else {
+        back.innerHTML = '<div class="back-empty">Chưa có pinyin / nghĩa</div>';
+      }
+    }
+    inner.append(front, back);
+    card.appendChild(inner);
+
+    // Nút loa (chỉ tạo DOM, logic xử lý ở delegation)
+    const spk = document.createElement('button');
+    spk.className = 'spk-btn';
+    spk.textContent = '🔊';
+    spk.title = 'Nghe phát âm';
+    card.appendChild(spk);
+
+    // Nút lưu ý
+    const flagBtn = document.createElement('button');
+    flagBtn.className = 'flag-btn' + (it.flag ? ' on' : '');
+    flagBtn.textContent = '⚑';
+    flagBtn.title = 'Đánh dấu lưu ý (đọc sai)';
+    card.appendChild(flagBtn);
+
+    // Nút tập viết & luyện đọc — chỉ hiện khi có ký tự Hán thực sự
+    const chars = [...it.h].filter(c => /\p{Unified_Ideograph}/u.test(c));
+    if (chars.length > 0) {
+      const readBtn = document.createElement('button');
+      readBtn.className = 'read-btn';
+      readBtn.textContent = '🎙️';
+      readBtn.title = 'Luyện đọc phát âm';
+      back.appendChild(readBtn);
+
+      const writeBtn = document.createElement('button');
+      writeBtn.className = 'write-btn';
+      writeBtn.textContent = '✍️';
+      writeBtn.title = 'Tập viết chữ';
+      back.appendChild(writeBtn);
+    }
+
+    return card;
+  }
+
+  // Render từng đợt thẻ vào grid (lazy chunk)
+  function renderGridChunk() {
+    const chunk = gridView.slice(gridRendered, gridRendered + GRID_CHUNK);
+    if (chunk.length === 0) return;
+
+    const frag = document.createDocumentFragment();
+    chunk.forEach((idx, i) => {
+      const it = items[idx];
+      if (!it) return;
+      const card = buildFlashcard(it, idx, gridRendered + i);
+      frag.appendChild(card);
+    });
+    grid.appendChild(frag);
+    gridRendered += chunk.length;
+
+    // Còn thẻ chưa render → đặt sentinel để tự động tải thêm khi cuộn
+    if (gridRendered < gridView.length) {
+      const sentinel = document.createElement('div');
+      sentinel.className = 'grid-sentinel';
+      sentinel.style.height = '1px';
+      grid.appendChild(sentinel);
+
+      gridObserver = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          gridObserver.disconnect();
+          gridObserver = null;
+          sentinel.remove();
+          renderGridChunk(); // render chunk tiếp
+        }
+      }, { rootMargin: '300px' }); // preload trước 300px
+
+      gridObserver.observe(sentinel);
+    }
+  }
+
+  function renderGrid() {
+    // Dọn dẹp observer cũ
+    if (gridObserver) { gridObserver.disconnect(); gridObserver = null; }
+
+    grid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+    grid.classList.toggle('dense', columns >= 7);
+    grid.innerHTML = '';
+
+    const flaggedCount = items.filter(x => x.flag).length;
+    flagFilterBtn.textContent = `⚑ Chữ lưu ý (${flaggedCount})`;
+    countEl.textContent = `${items.length} chữ`;
+    updateStudyBanner();
+
+    // Vẽ biểu đồ tiến độ học tập (SRS Analytics)
+    const srsEl = $('srsAnalytics');
+    if (srsEl) {
+      if (items.length === 0) {
+        srsEl.style.display = 'none';
+      } else {
+        const lFilter = lessonFilter.value;
+        const pool = lFilter === 'all' ? items : items.filter(it => it.l === lFilter);
+        const total = pool.length;
+
+        if (total === 0) {
+          srsEl.style.display = 'none';
+        } else {
+          srsEl.style.display = 'block';
+          const mastered = pool.filter(it => it.level >= 4).length;
+          const learning = pool.filter(it => it.level > 0 && it.level < 4).length;
+          const unlearned = pool.filter(it => it.level === 0).length;
+
+          const masteredPct = total > 0 ? Math.round(mastered / total * 100) : 0;
+          const learningPct = total > 0 ? Math.round(learning / total * 100) : 0;
+          const unlearnedPct = total > 0 ? (100 - masteredPct - learningPct) : 0; // Đảm bảo tổng phần trăm là 100%
+
+          const scopeText = lFilter === 'all' ? 'kho từ vựng' : 'buổi học này';
+
+          srsEl.innerHTML = `
+            <div class="srs-analytics">
+              <div class="srs-header">
+                <span class="srs-title">📊 Tiến độ học tập</span>
+                <span class="srs-summary">Bạn đã làm chủ được <strong>${masteredPct}%</strong> ${scopeText}! 🏆</span>
+              </div>
+              <div class="srs-bar">
+                <div class="srs-segment srs-mastered" style="width: ${masteredPct}%;" title="Đã thuộc: ${masteredPct}%"></div>
+                <div class="srs-segment srs-learning" style="width: ${learningPct}%;" title="Đang ôn: ${learningPct}%"></div>
+                <div class="srs-segment srs-new" style="width: ${unlearnedPct}%;" title="Chưa học: ${unlearnedPct}%"></div>
+              </div>
+              <div class="srs-legend">
+                <div class="srs-legend-item">
+                  <span class="srs-dot srs-dot-mastered"></span>
+                  <span class="srs-legend-text">Đã thuộc: <strong>${mastered}</strong>/${total} chữ (${masteredPct}%)</span>
+                </div>
+                <div class="srs-legend-item">
+                  <span class="srs-dot srs-dot-learning"></span>
+                  <span class="srs-legend-text">Đang ôn: <strong>${learning}</strong>/${total} chữ (${learningPct}%)</span>
+                </div>
+                <div class="srs-legend-item">
+                  <span class="srs-dot srs-dot-new"></span>
+                  <span class="srs-legend-text">Chưa học: <strong>${unlearned}</strong>/${total} chữ (${unlearnedPct}%)</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+    }
+
+    if (items.length === 0) {
+      grid.innerHTML = '<div class="empty-msg">Chưa có chữ nào — sang trang "Thêm chữ" để nhập 👆</div>';
+      return;
+    }
+
+    // Lọc theo "chữ lưu ý" và buổi học
+    let view = order;
+    const lFilter = lessonFilter.value;
+    if (lFilter !== 'all') {
+      view = view.filter(idx => items[idx] && items[idx].l === lFilter);
+    }
+    if (flagOnly) {
+      view = view.filter(idx => items[idx] && items[idx].flag);
+      if (view.length === 0) {
+        grid.innerHTML = '<div class="empty-msg">Chưa có chữ nào được đánh dấu 🚩 (hoặc phù hợp với buổi học hiện tại). Lật thẻ và bấm 🚩 để đánh dấu chữ đọc sai.</div>';
+        return;
+      }
+    }
+
+    // Lazy loading: lưu view và render chunk đầu tiên
+    gridView = view;
+    gridRendered = 0;
+    renderGridChunk();
+  }
+
+  colSelect.addEventListener('change', () => { columns = parseInt(colSelect.value, 10); renderGrid(); });
+  frontSelect.addEventListener('change', () => { frontMode = frontSelect.value; renderGrid(); });
+  lessonFilter.addEventListener('change', () => { renderGrid(); });
+
+  shuffleBtn.addEventListener('click', () => {
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    renderGrid();
+  });
+  flipAllBtn.addEventListener('click', () => {
+    grid.querySelectorAll('.card').forEach(c => c.classList.remove('flipped'));
+  });
+
+  // ===== Trang Kiểm tra =====
+  let quizQueue = [];   // chỉ số items cần kiểm tra
+  let quizPos = 0;
+  let quizKeyState = null;
+  let sessionMarks = {};   // idx -> true (thuộc) / false (chưa thuộc) trong phiên hiện tại
+  const quizMode = $('quizMode'), quizFront = $('quizFront'), quizType = $('quizType');
+  function shuffleArr(a) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  const startQuizBtn = $('startQuizBtn'), quizStage = $('quizStage');
+  const quizBar = $('quizBar'), quizStat = $('quizStat'), quizTimerEl = $('quizTimer');
+
+  // Đồng hồ thời gian làm bài
+  let quizTimerId = null, quizStartMs = 0;
+  function fmtMMSS(sec) {
+    const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return m + ':' + String(s).padStart(2, '0');
+  }
+  function quizSecs() { return (Date.now() - quizStartMs) / 1000; }
+  function tickQuizTimer() { quizTimerEl.textContent = '⏱ ' + fmtMMSS(quizSecs()); }
+  function startQuizTimer() {
+    quizStartMs = Date.now();
+    if (quizTimerId) clearInterval(quizTimerId);
+    quizTimerId = setInterval(tickQuizTimer, 500);
+    tickQuizTimer();
+  }
+  function stopQuizTimer() { if (quizTimerId) { clearInterval(quizTimerId); quizTimerId = null; } }
+  function resetQuizTimer() { quizStartMs = 0; if (quizTimerEl) quizTimerEl.textContent = '⏱ 00:00'; }
+
+  // Dừng & đưa phần kiểm tra về mặc định (để bắt đầu lại từ đầu)
+  function resetQuiz() {
+    quizQueue = []; quizPos = 0;
+    stopQuizTimer(); resetQuizTimer();
+    setQuizRunning(false);
+  }
+
+  function knownCount() { return items.filter(x => x.known).length; }
+  function updateQuizStat() {
+    if (!quizStat) return;
+    quizStat.textContent = `Đã thuộc ${knownCount()} / ${items.length} chữ · Đến hạn ôn: ${dueCount()}`;
+  }
+
+  startQuizBtn.addEventListener('click', startQuiz);
+
+  // Đổi nút khi đang làm bài: ẩn "Bắt đầu", hiện "Dừng lại" + "Làm lại"
+  function setQuizRunning(on) {
+    if (startQuizBtn) startQuizBtn.style.display = on ? 'none' : '';
+    const r = $('quizRunBtns'); if (r) r.style.display = on ? 'flex' : 'none';
+  }
+  if ($('stopQuizBtn')) $('stopQuizBtn').onclick = () => {
+    showConfirm('Bạn có muốn DỪNG bài kiểm tra không?', () => {
+      resetQuiz();
+      renderQuiz();
+    });
+  };
+  if ($('restartQuizBtn')) $('restartQuizBtn').onclick = () => {
+    showConfirm('Làm lại bài kiểm tra từ đầu?', () => startQuiz());
+  };
+
+  const SESSION_SIZE = 10;   // số chữ mỗi phiên
+  let quizDeck = [];         // bộ bài đã trộn của TẤT CẢ chữ (đi hết mới trộn lại)
+  let quizDeckMode = null;
+  let quizDeckCount = 0;
+  let quizDeckLesson = null;
+
+  function buildDeck() {
+    let pool = items.map((_, i) => i);
+    const qLesson = $('quizLessonFilter');
+    if (qLesson && qLesson.value !== 'all') {
+      pool = pool.filter(i => items[i].l === qLesson.value);
+    }
+    // User definition: "chưa thuộc" means words they got wrong (level === 0 and has been tested)
+    if (quizMode.value === 'unknown') pool = pool.filter(i => items[i].level === 0 && items[i].due > 0);
+    quizDeck = shuffleArr(pool);
+    quizDeckMode = quizMode.value;
+    quizDeckCount = items.length;
+    quizDeckLesson = qLesson ? qLesson.value : 'all';
+  }
+
+  function startQuiz() {
+    const qLesson = $('quizLessonFilter');
+    const curLesson = qLesson ? qLesson.value : 'all';
+    
+    let poolCheck = items.map((_, i) => i);
+    if (curLesson !== 'all') poolCheck = poolCheck.filter(i => items[i].l === curLesson);
+    
+    if (poolCheck.length === 0) {
+      stopQuizTimer(); setQuizRunning(false);
+      quizStage.innerHTML = '<div class="quiz-done"><p>Không có chữ nào trong phần này!</p></div>';
+      quizBar.style.width = '0%'; quizKeyState = null;
+      return;
+    }
+    if (quizMode.value === 'unknown') {
+      const hasUnknown = poolCheck.some(i => items[i].level === 0 && items[i].due > 0);
+      if (!hasUnknown) {
+        stopQuizTimer(); setQuizRunning(false);
+        quizStage.innerHTML = '<div class="quiz-done"><p>Tuyệt vời! Hiện tại bạn không có chữ nào bị sai (chưa thuộc) trong phần này 🎉</p></div>';
+        quizBar.style.width = '0%'; quizKeyState = null;
+        return;
+      }
+    }
+    // Trộn lại bộ bài nếu: đổi chế độ, đổi danh sách, đổi buổi học, hoặc đã đi hết tất cả chữ
+    if (quizDeckMode !== quizMode.value || quizDeckCount !== items.length || quizDeckLesson !== curLesson || quizDeck.length === 0) buildDeck();
+    // Lấy ~10 chữ tiếp theo chưa gặp (không lặp trong & giữa các phiên)
+    quizQueue = quizDeck.splice(0, SESSION_SIZE);
+    quizPos = 0;
+    sessionMarks = {};   // bắt đầu phiên mới -> reset kết quả
+    startQuizTimer();
+    setQuizRunning(true);   // hiện nút Dừng lại / Làm lại
+    renderQuiz();
+  }
+  function sessionCounts() {
+    let k = 0, u = 0;
+    for (const idx in sessionMarks) { if (sessionMarks[idx]) k++; else u++; }
+    return { k: k, u: u };
+  }
+
+  function renderQuiz() {
+    updateQuizStat();
+    if (items.length === 0) {
+      stopQuizTimer(); setQuizRunning(false);
+      quizStage.innerHTML = '<p class="empty-msg">Chưa có chữ nào — sang trang “Thêm chữ” để nhập 👆</p>';
+      quizBar.style.width = '0%'; quizKeyState = null; return;
+    }
+    if (quizQueue.length === 0) {
+      stopQuizTimer(); setQuizRunning(false);
+      let extra = '';
+      if (quizMode.value === 'due') extra = ' (Hiện không có chữ nào đến hạn ôn — quay lại sau nhé 🎉)';
+      else if (quizMode.value === 'unknown') extra = ' (Hiện không còn chữ nào chưa thuộc 🎉)';
+      quizStage.innerHTML = '<div class="quiz-done"><p>Nhấn “Bắt đầu / Làm lại” để luyện tập.' + extra + '</p></div>';
+      quizBar.style.width = '0%'; quizKeyState = null; return;
+    }
+    if (quizPos >= quizQueue.length) {
+      stopQuizTimer(); setQuizRunning(false);
+      const timeStr = fmtMMSS(quizSecs());
+      const sc = sessionCounts();
+      const total = sc.k + sc.u;
+      const unknownIdx = Object.keys(sessionMarks).filter(i => !sessionMarks[i]).map(Number);
+      const pct = total ? Math.round(sc.k / total * 100) : 0;
+      const isMC = quizType.value === 'mc';
+      const okLabel = isMC ? 'Đúng' : 'Thuộc';
+      const noLabel = isMC ? 'Sai' : 'Chưa thuộc';
+
+      let reviewHtml = '';
+      if (unknownIdx.length) {
+        reviewHtml = `
+          <div class="review-title">Cần ôn lại (${unknownIdx.length})</div>
+          <div class="review-list">
+            ${unknownIdx.map(i => {
+              const it = items[i];
+              return `<div class="review-item">
+                <span class="ri-hanzi">${escapeHtml(it.h)}</span>
+                <span class="ri-info">
+                  <span class="ri-pinyin">${colorPinyin(it.p) || '—'}</span>
+                  <span class="ri-meaning">${escapeHtml(it.m) || ''}</span>
+                </span>
+              </div>`;
+            }).join('')}
+          </div>`;
+      } else {
+        reviewHtml = `<p class="all-good">Tuyệt vời! Phiên này bạn thuộc hết 🎉</p>`;
+      }
+
+      quizStage.innerHTML = `<div class="quiz-done">
+        <p class="done-title">Hoàn thành! 🎉</p>
+        <div class="done-ring" style="--pct:${pct}">
+          <div class="done-ring-in"><b>${pct}%</b><span>${isMC ? 'đúng' : 'thuộc'}</span></div>
+        </div>
+        <div class="done-score">Điểm: <b>${sc.k}/${total}</b> · Thời gian: <b>${timeStr}</b></div>
+        <div class="result-chips">
+          <span class="chip chip-known">✓ ${okLabel}: ${sc.k}</span>
+          <span class="chip chip-unknown">✗ ${noLabel}: ${sc.u}</span>
+        </div>
+        ${reviewHtml}
+        <div class="quiz-btns" style="margin-top:18px;">
+          ${unknownIdx.length ? '<button class="btn-unknown" id="reviewUnknownBtn">↻ Ôn lại chữ chưa thuộc</button>' : ''}
+          <button class="btn-gold" id="restartBtn">Làm lại</button>
+        </div>
+      </div>`;
+      quizBar.style.width = '100%'; quizKeyState = null;
+      recordResult('quiz', { pct: pct, k: sc.k, total: total, time: timeStr, mc: isMC, d: gameDateStamp() });
+      $('restartBtn').addEventListener('click', startQuiz);
+      if ($('reviewUnknownBtn')) $('reviewUnknownBtn').addEventListener('click', () => {
+        // ôn lại chỉ những chữ chưa thuộc của phiên này
+        const pool = unknownIdx.slice();
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        quizQueue = pool; quizPos = 0; sessionMarks = {};
+        renderQuiz();
+      });
+      return;
+    }
+
+    quizBar.style.width = (quizPos / quizQueue.length * 100) + '%';
+    if (quizType.value === 'mc') { renderMC(); return; }   // chế độ trắc nghiệm
+    const it = items[quizQueue[quizPos]];
+    const askHanzi = quizFront.value === 'hanzi';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'quiz-stage';
+    const sc = sessionCounts();
+    wrap.innerHTML = `
+      <p class="hint" style="margin:0 0 8px;">Câu ${quizPos + 1} / ${quizQueue.length}</p>
+      <div class="quiz-tally">
+        <span class="tally-known">✓ Thuộc ${sc.k}</span>
+        <span class="tally-unknown">✗ Chưa thuộc ${sc.u}</span>
+      </div>
+      <div class="qcard" id="qcard">
+        <div class="qcard-inner">
+          <div class="qface qfront">
+            ${askHanzi
+              ? `<div class="big-hanzi">${escapeHtml(it.h)}</div>`
+              : `<div class="big-meaning">${escapeHtml(it.m || '(chưa có nghĩa)')}</div>`}
+          </div>
+          <div class="qface qback">
+            <button class="spk-btn" id="qSpk" type="button" title="Nghe phát âm">🔊</button>
+            ${askHanzi
+              ? (it.p ? `<div class="q-pinyin">${colorPinyin(it.p)}</div>` : '') +
+                `<div class="q-meaning">${escapeHtml(it.m || '(chưa có nghĩa)')}</div>`
+              : `<div class="big-hanzi">${escapeHtml(it.h)}</div>` +
+                (it.p ? `<div class="q-pinyin">${colorPinyin(it.p)}</div>` : '')}
+          </div>
+        </div>
+      </div>
+      <div class="quiz-btns" id="quizBtns">
+        <button class="btn-gold" id="revealBtn">👁 Hiện đáp án</button>
+      </div>`;
+    quizStage.innerHTML = '';
+    quizStage.appendChild(wrap);
+
+    const qcard = $('qcard');
+    const btns = $('quizBtns');
+    qcard.addEventListener('click', reveal);
+    $('revealBtn').addEventListener('click', reveal);
+    if ($('qSpk')) $('qSpk').addEventListener('click', (e) => { e.stopPropagation(); speak(it.h); });
+    let revealed = false;
+    function reveal() {
+      if (revealed) return;
+      revealed = true;
+      qcard.classList.add('flipped');
+      speak(it.h);   // đọc chữ Hán khi hiện đáp án
+      popPinyin(qcard.querySelector('.q-pinyin'));
+      btns.innerHTML = '';
+      btns.appendChild(mkBtn('btn-unknown', '✗ Chưa thuộc (1)', () => mark(false)));
+      btns.appendChild(mkBtn('btn-known', '✓ Thuộc (2)', () => mark(true)));
+    }
+    function mark(known) {
+      const idx = quizQueue[quizPos];
+      scheduleItem(items[idx], known);
+      sessionMarks[idx] = known;   // ghi lại kết quả phiên
+      if (known) addPoints(1);     // thuộc -> +1 điểm
+      save();
+      quizPos++;
+      renderQuiz();
+    }
+    // trạng thái cho phím tắt
+    quizKeyState = {
+      mode: 'card',
+      reveal: reveal,
+      markKnown: () => { if (revealed) mark(true); },
+      markUnknown: () => { if (revealed) mark(false); },
+      back: null
+    };
+  }
+
+  // ===== Chế độ trắc nghiệm A/B/C/D =====
+  function renderMC() {
+    const idx = quizQueue[quizPos];
+    const it = items[idx];
+    const askHanzi = quizFront.value === 'hanzi';
+    // Hỏi bằng chữ Hán -> đáp án là PINYIN; hỏi bằng nghĩa -> đáp án là chữ Hán
+    const answerOf = (x) => (askHanzi ? (x.p || '') : (x.h || ''));
+    const promptText = askHanzi ? it.h : (it.m || '(chưa có nghĩa)');
+    const correctAns = answerOf(it) || '(trống)';
+    const optIsPinyin = askHanzi;   // đáp án là pinyin -> tô màu thanh điệu
+
+    // gom đáp án nhiễu (khác đáp án đúng, không trùng nhau)
+    // Ưu tiên chữ có CÙNG số ký tự với câu hỏi (1 chữ -> nhiễu 1 chữ...); thiếu mới lấy chữ khác
+    const charLen = (s) => Array.from(s || '').length;
+    const wantLen = charLen(it.h);
+    const seen = new Set([correctAns]);
+    const distractors = [];
+    const all = shuffleArr(items.map((_, i) => i).filter((i) => i !== idx));
+    const sameLen = all.filter((i) => charLen(items[i].h) === wantLen);
+    const otherLen = all.filter((i) => charLen(items[i].h) !== wantLen);
+    for (const i of sameLen.concat(otherLen)) {
+      const a = answerOf(items[i]);
+      if (a && !seen.has(a)) { seen.add(a); distractors.push(a); }
+      if (distractors.length >= 3) break;
+    }
+    const options = shuffleArr([correctAns, ...distractors]);
+
+    const sc = sessionCounts();
+    const wrap = document.createElement('div');
+    wrap.className = 'quiz-stage';
+    wrap.innerHTML = `
+      <p class="hint" style="margin:0 0 8px;">Câu ${quizPos + 1} / ${quizQueue.length}</p>
+      <div class="quiz-tally">
+        <span class="tally-known">✓ Đúng ${sc.k}</span>
+        <span class="tally-unknown">✗ Sai ${sc.u}</span>
+      </div>
+      <div class="mc-prompt ${askHanzi ? 'mc-hanzi' : ''}">${escapeHtml(promptText)}${askHanzi ? '<button class="mc-spk" id="mcSpk" title="Nghe lại" style="display:none;">🔊</button>' : ''}</div>
+      <div class="mc-options" id="mcOpts">
+        ${options.map((a, i) => `<button class="mc-opt" data-ok="${a === correctAns ? 1 : 0}"><b>${'ABCD'[i]}</b><span>${optIsPinyin ? colorPinyin(a) : escapeHtml(a)}</span></button>`).join('')}
+      </div>
+      <div class="mc-feedback" id="mcFb"></div>
+      <div class="quiz-btns" id="mcNext" style="margin-top:14px;"></div>`;
+    quizStage.innerHTML = '';
+    quizStage.appendChild(wrap);
+
+    const optBtns = Array.from(wrap.querySelectorAll('.mc-opt'));
+
+    // Hỏi bằng chữ Hán -> nút nghe (đọc sau khi chọn, không đọc ngay)
+    if (askHanzi) {
+      const spk = $('mcSpk');
+      if (spk) spk.addEventListener('click', (e) => { e.stopPropagation(); speak(it.h); });
+    }
+
+    let answered = false;
+    function choose(i) {
+      if (answered || !optBtns[i]) return;
+      answered = true;
+      const btn = optBtns[i];
+      const correct = btn.dataset.ok === '1';
+      optBtns.forEach((b) => {
+        b.disabled = true;
+        if (b.dataset.ok === '1') b.classList.add('correct');
+      });
+      if (!correct) btn.classList.add('wrong');
+
+      const fb = $('mcFb');
+      fb.textContent = correct ? '✓ Chính xác!' : ('✗ Sai rồi — đáp án đúng: ' + correctAns);
+      fb.className = 'mc-feedback ' + (correct ? 'ok' : 'no');
+
+      scheduleItem(it, correct);
+      sessionMarks[idx] = correct;
+      if (correct) addPoints(1);   // trả lời đúng -> +1 điểm
+      save();
+      const spk = $('mcSpk'); if (spk) spk.style.display = '';   // hiện nút loa sau khi chọn
+      speak(it.h);   // đọc chữ Hán sau khi chọn
+
+      const nextBtn = mkBtn('btn-gold', (quizPos + 1 < quizQueue.length ? 'Câu tiếp →' : 'Xem kết quả →'), next);
+      $('mcNext').appendChild(nextBtn);
+    }
+    function next() { quizPos++; renderQuiz(); }
+
+    optBtns.forEach((b, i) => b.addEventListener('click', () => choose(i)));
+
+    quizKeyState = {
+      mode: 'mc',
+      choose: choose,
+      next: () => { if (answered) next(); },
+      back: null
+    };
+  }
+
+  // ===== Phát âm chữ Hán =====
+  let curAudio = null;
+  let soundOn = localStorage.getItem('hanzi-sound') !== 'off';   // mặc định bật
+  const soundToggle = $('soundToggle');
+  function applySound(on) {
+    soundOn = on;
+    soundToggle.textContent = on ? '🔊' : '🔇';
+    soundToggle.classList.toggle('off', !on);
+    soundToggle.title = on ? 'Đang bật tiếng (bấm để tắt)' : 'Đang tắt tiếng (bấm để bật)';
+    localStorage.setItem('hanzi-sound', on ? 'on' : 'off');
+    if (!on && curAudio) { try { curAudio.pause(); } catch (e) {} }
+  }
+  soundToggle.addEventListener('click', () => applySound(!soundOn));
+  applySound(soundOn);
+
+  function speak(text) {
+    if (!text || !soundOn) return;   // tắt tiếng thì không đọc
+    if (curAudio) { try { curAudio.pause(); } catch (e) {} curAudio = null; }
+    // Chỉ dùng một giọng duy nhất: Google (translate.googleapis.com, client=gtx)
+    const url = 'https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=zh-CN&q=' + encodeURIComponent(text);
+    try {
+      const audio = new Audio();
+      audio.referrerPolicy = 'no-referrer';   // không gửi Referer để Google chịu phát
+      audio.src = url;
+      curAudio = audio;
+      audio.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  // ===== Phím tắt khi ở trang Kiểm tra =====
+  document.addEventListener('keydown', (e) => {
+    if (!$('page-quiz').classList.contains('active') || !quizKeyState) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+    if (quizKeyState.mode === 'mc') {
+      // Trắc nghiệm: 1–4 chọn đáp án, Space/Enter sang câu tiếp, Backspace quay lại
+      if (['1', '2', '3', '4'].includes(e.key)) { e.preventDefault(); quizKeyState.choose(Number(e.key) - 1); }
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); quizKeyState.next(); }
+      else if (e.key === 'Backspace') { e.preventDefault(); if (quizKeyState.back) quizKeyState.back(); }
+      return;
+    }
+    // Lật thẻ: Space hiện đáp án, 1/2 chưa/đã thuộc, Backspace quay lại
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); quizKeyState.reveal(); }
+    else if (e.key === '2') { quizKeyState.markKnown(); }
+    else if (e.key === '1') { quizKeyState.markUnknown(); }
+    else if (e.key === 'Backspace') { e.preventDefault(); if (quizKeyState.back) quizKeyState.back(); }
+  });
+
+  // ===== Đổi tông sáng/tối =====
+  const themeToggle = $('themeToggle');
+  function applyTheme(light) {
+    document.body.classList.toggle('light', light);
+    themeToggle.textContent = light ? '☀️' : '🌙';
+    localStorage.setItem('hanzi-theme', light ? 'light' : 'dark');
+  }
+  themeToggle.addEventListener('click', () => applyTheme(!document.body.classList.contains('light')));
+  applyTheme(localStorage.getItem('hanzi-theme') === 'light');
+
+  // Nút ⚙️ (mobile): xổ/gập 3 nút tùy chọn
+  const toolsToggle = $('toolsToggle');
+  if (toolsToggle) {
+    toolsToggle.addEventListener('click', (e) => { e.stopPropagation(); document.body.classList.toggle('tools-open'); });
+    // bấm ra ngoài thì gập lại
+    document.addEventListener('click', (e) => {
+      if (!document.body.classList.contains('tools-open')) return;
+      if (e.target.closest('.theme-toggle')) return;
+      document.body.classList.remove('tools-open');
+    });
+  }
+
+  // Bật lại animation 3D cho pinyin
+  function popPinyin(el) {
+    if (!el) return;
+    el.classList.remove('pop');
+    void el.offsetWidth;   // ép trình duyệt chạy lại animation
+    el.classList.add('pop');
+  }
+
+  function showPromptModal(msg, defaultVal, onSave) {
+    const modal = $('promptModal');
+    if (!modal) { const v = prompt(msg, defaultVal || ''); if (v !== null) onSave(v); return; }
+    $('promptMsg').textContent = msg;
+    const input = $('promptInput');
+    input.value = defaultVal || '';
+
+    const close = () => modal.classList.remove('active');
+    $('btnPromptCancel').onclick = close;
+    $('btnPromptSave').onclick = () => { close(); onSave(input.value); };
+    input.onkeydown = (e) => { if (e.key === 'Enter') { close(); onSave(input.value); } };
+
+    modal.classList.add('active');
+    setTimeout(() => input.focus(), 50);
+  }
+
+  // ===== Tiện ích =====
+  function escapeHtml(str) {
+    return (str || '').replace(/[&<>"']/g, s => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[s]));
+  }
+
+  // ===== Service Worker: cài như app, chạy offline, tự cập nhật bản mới =====
+  if ('serviceWorker' in navigator) {
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      location.reload();   // có bản mới -> tự tải lại
+    });
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').then((reg) => reg.update()).catch(() => {});
+    });
+  }
+
+  // ===== Trò chơi Ghép thẻ =====
+  const gameCount = $('gameCount'), startGameBtn = $('startGameBtn'),
+        gameTimer = $('gameTimer'), gameStage = $('gameStage');
+  const GAME_KEY = 'hanzi-game-scores';
+  let gameTimerId = null, gameBaseElapsed = 0, gameRunStart = 0, gamePenalty = 0,
+      gameSelected = null, gameMatched = 0, gamePairs = 0, gameActive = false, gamePaused = false;
+
+  // Đổi nút khi đang chơi: ẩn "Bắt đầu", hiện "Tạm dừng" + "Làm lại"
+  function setGameRunning(on) {
+    if (startGameBtn) startGameBtn.style.display = on ? 'none' : '';
+    const r = $('gameRunBtns'); if (r) r.style.display = on ? 'flex' : 'none';
+  }
+
+  function gameElapsed() {
+    return gameBaseElapsed + (gameRunStart ? (Date.now() - gameRunStart) / 1000 : 0) + gamePenalty;
+  }
+  function fmtTime(s) {
+    const m = Math.floor(s / 60), sec = s - m * 60;
+    return (m > 0 ? m + 'p ' : '') + sec.toFixed(1) + 's';
+  }
+  function updateGameTimer() { gameTimer.textContent = fmtTime(gameElapsed()); }
+  function startTimerTick() { if (gameTimerId) clearInterval(gameTimerId); gameTimerId = setInterval(updateGameTimer, 100); }
+  // Rời tab/ẩn trang -> THOÁT game (reset hẳn), phải bấm Bắt đầu để chơi lại
+  function resetGame() {
+    if (gameTimerId) { clearInterval(gameTimerId); gameTimerId = null; }
+    gameActive = false; gamePaused = false; gameRunStart = 0; gameBaseElapsed = 0; gamePenalty = 0;
+    gameSelected = null; gameMatched = 0;
+    gameTimer.textContent = '0.0s';
+    setGameRunning(false);
+  }
+
+  function gameStartScreen() {
+    if (gameActive) return;
+    const usable = items.filter(it => it.h && (it.p || it.m));
+    gameStage.innerHTML = usable.length < 3
+      ? '<p class="empty-msg">Cần ít nhất 3 chữ (có pinyin/nghĩa) để chơi — thêm chữ trước nhé 👆</p>'
+      : '<p class="empty-msg">Bấm “Bắt đầu / Chơi lại” để chơi ghép thẻ 🎮</p>';
+    gameTimer.textContent = '0.0s';
+  }
+
+  startGameBtn.addEventListener('click', startGame);
+
+  function pauseGame() {
+    if (!gameActive || gamePaused) return;
+    gamePaused = true;
+    gameBaseElapsed += (gameRunStart ? (Date.now() - gameRunStart) / 1000 : 0);
+    gameRunStart = 0;
+    if (gameTimerId) { clearInterval(gameTimerId); gameTimerId = null; }
+    updateGameTimer();
+    const pb = $('pauseGameBtn'); if (pb) pb.textContent = '▶ Tiếp tục';
+    if (gameStage.firstChild) gameStage.firstChild.classList.add('paused');
+  }
+  function resumeGame() {
+    if (!gameActive || !gamePaused) return;
+    gamePaused = false;
+    gameRunStart = Date.now();
+    startTimerTick();
+    const pb = $('pauseGameBtn'); if (pb) pb.textContent = '⏸ Tạm dừng';
+    if (gameStage.firstChild) gameStage.firstChild.classList.remove('paused');
+  }
+  if ($('pauseGameBtn')) $('pauseGameBtn').onclick = () => { gamePaused ? resumeGame() : pauseGame(); };
+  if ($('restartGameBtn')) $('restartGameBtn').onclick = () => {
+    showConfirm('Làm lại từ đầu?', () => startGame());
+  };
+  if ($('endGameBtn')) $('endGameBtn').onclick = () => {
+    showConfirm('Bạn chưa chơi xong, bạn có muốn kết thúc không?', () => {
+      resetGame(); gameStartScreen();
+    });
+  };
+
+  function startGame() {
+    let usable = items.map((_, i) => i).filter(i => items[i].h && (items[i].p || items[i].m));
+    const gLesson = $('gameLessonFilter');
+    if (gLesson && gLesson.value !== 'all') {
+      usable = usable.filter(i => items[i].l === gLesson.value);
+    }
+    if (usable.length < 3) { showAlert('Cần ít nhất 3 chữ có pinyin/nghĩa trong phần này để chơi.'); return; }
+    const want = Math.min(parseInt($('gameCount').value, 10), usable.length);
+    shuffleArr(usable);
+    const chosen = usable.slice(0, want);
+    gamePairs = chosen.length;
+
+    let cards = [];
+    chosen.forEach(idx => { cards.push({ idx, side: 'han' }); cards.push({ idx, side: 'def' }); });
+    shuffleArr(cards);
+
+    gameMatched = 0; gamePenalty = 0; gameSelected = null; gameActive = true; gamePaused = false;
+    gameBaseElapsed = 0; gameRunStart = Date.now();
+    startTimerTick();
+    setGameRunning(true);
+    const pb = $('pauseGameBtn'); if (pb) pb.textContent = '⏸ Tạm dừng';
+
+    const board = document.createElement('div');
+    board.className = 'game-board';
+    cards.forEach(c => {
+      const it = items[c.idx];
+      const el = document.createElement('div');
+      el.className = 'game-card';
+      el.dataset.idx = c.idx;
+      el.dataset.side = c.side;
+      if (c.side === 'han') {
+        el.innerHTML = `<div class="gc-han">${escapeHtml(it.h)}</div>`;
+      } else {
+        el.innerHTML = (it.p ? `<div class="gc-pinyin">${colorPinyin(it.p)}</div>` : '') +
+                       (it.m ? `<div class="gc-meaning">${escapeHtml(it.m)}</div>` : '');
+      }
+      el.addEventListener('click', () => gameClick(el));
+      board.appendChild(el);
+    });
+    gameStage.innerHTML = '';
+    gameStage.appendChild(board);
+    updateGameTimer();
+  }
+
+  function gameClick(el) {
+    if (!gameActive || gamePaused || el.classList.contains('matched')) return;
+    if (gameSelected === el) { el.classList.remove('selected'); gameSelected = null; return; }
+    if (!gameSelected) { el.classList.add('selected'); gameSelected = el; return; }
+
+    const a = gameSelected, b = el;
+    const isMatch = (a.dataset.idx === b.dataset.idx) && (a.dataset.side !== b.dataset.side);
+    if (isMatch) {
+      a.classList.remove('selected');
+      a.classList.add('matched'); b.classList.add('matched');
+      gameSelected = null;
+      gameMatched++;
+      if (gameMatched >= gamePairs) finishGame();
+    } else {
+      gamePenalty += 3;   // sai: +3 giây
+      a.classList.add('wrong'); b.classList.add('wrong');
+      a.classList.remove('selected');
+      setTimeout(() => { a.classList.remove('wrong'); b.classList.remove('wrong'); }, 450);
+      gameSelected = null;
+      flashTimer();   // đồng hồ nháy đỏ + phóng to
+    }
+  }
+  function flashTimer() {
+    gameTimer.classList.remove('penalty');
+    void gameTimer.offsetWidth;   // ép chạy lại animation
+    gameTimer.classList.add('penalty');
+  }
+
+  function gameDateStamp() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}`;
+  }
+
+  function finishGame() {
+    gameActive = false; gamePaused = false;
+    setGameRunning(false);
+    if (gameTimerId) { clearInterval(gameTimerId); gameTimerId = null; }
+    const finalT = gameElapsed();
+    updateGameTimer();
+
+    let scores = [];
+    try { const d = JSON.parse(localStorage.getItem(GAME_KEY)); if (Array.isArray(d)) scores = d; } catch (e) {}
+    const curT = Math.round(finalT * 10) / 10;
+    // Kỷ lục cũ của CHÍNH mình cho đúng số cặp này (trước khi thêm lần chơi hiện tại)
+    const prevTimes = scores.filter(s => s.pairs === gamePairs).map(s => s.t);
+    const prevBest = prevTimes.length ? Math.min(...prevTimes) : null;
+    const isRecord = prevBest === null || curT < prevBest;
+
+    const entry = { t: curT, pairs: gamePairs, d: gameDateStamp() };
+    scores.push(entry);
+    scores.sort((x, y) => x.t - y.t);
+    scores = scores.slice(0, 50);
+    localStorage.setItem(GAME_KEY, JSON.stringify(scores));
+
+    const recordText = isRecord
+      ? `🏆 Chúc mừng! Bạn vừa lập <b>kỷ lục mới</b> với ${gamePairs} cặp!`
+      : `💪 Cố gắng lên! Kỷ lục của bạn là <b>${fmtTime(prevBest)}</b> cho ${gamePairs} cặp.`;
+    gameStage.innerHTML = `
+      <div class="panel game-done">
+        <div class="gd-title">🎉 Chúc mừng! Bạn đã hoàn thành</div>
+        <div class="gd-time">⏱ <b>${fmtTime(finalT)}</b></div>
+        <div class="gd-rank ${isRecord ? 'gd-record' : ''}">${recordText}</div>
+        <div class="quiz-btns"><button class="btn-gold" id="playAgainBtn">▶ Chơi lại</button></div>
+        <div class="lb-title">🌐 Bảng xếp hạng chung — ${gamePairs} cặp</div>
+        <div class="leaderboard" id="onlineLb"><p class="io-note">Đang tải…</p></div>
+      </div>`;
+    $('playAgainBtn').addEventListener('click', startGame);
+    submitAndLoadLeaderboard(finalT, gamePairs);   // gửi & tải bảng xếp hạng chung
+    addPoints(gamePairs);   // hoàn thành trò chơi -> +điểm theo số cặp
+    recordResult('game', { t: Math.round(finalT * 10) / 10, pairs: gamePairs, d: gameDateStamp() });
+  }
+
+  // ===== Firebase: đồng bộ chữ + bảng xếp hạng =====
+  const FB_CONFIG = {
+    apiKey: "AIzaSyDB15EkqWvyFpUTdy_1D80DnKg1cT-946Q",
+    authDomain: "hoc-chu-han.firebaseapp.com",
+    projectId: "hoc-chu-han",
+    storageBucket: "hoc-chu-han.firebasestorage.app",
+    messagingSenderId: "730479874371",
+    appId: "1:730479874371:web:0219d04f0f1279ba0c9ff6"
+  };
+  try {
+    if (window.firebase && firebase.initializeApp) {
+      firebase.initializeApp(FB_CONFIG);
+      db = firebase.firestore();
+      // Đăng nhập ẩn danh để Security Rules cho phép ghi (mỗi máy 1 tài khoản ẩn danh, tự nhớ)
+      if (firebase.auth) {
+        firebase.auth().signInAnonymously().catch(() => {});
+      }
+    }
+  } catch (e) { db = null; }
+
+  // ===== Từ vựng CHUNG cho cả lớp (shared/words) =====
+  // Đẩy lên đám mây: chỉ chữ/pinyin/nghĩa/bài (không gồm tiến độ cá nhân)
+  function pushVocab() {
+    if (!db) return;
+    const vocab = items.map(it => ({ h: it.h, p: it.p, m: it.m, l: it.l || '', ex: it.ex || '' }));
+    lastVocabJson = JSON.stringify({ vocab: vocab, lessons: extraLessons, passages: passages, lockedLessons: lockedLessons });
+    db.collection('shared').doc('words')
+      .set({ vocab: vocab, lessons: extraLessons, passages: passages, lockedLessons: lockedLessons, updatedAt: Date.now() })
+      .catch(() => {});
+  }
+  // Nhận nội dung chung: cập nhật chữ/bài/bài khóa nhưng GIỮ tiến độ cá nhân (khớp theo chữ Hán)
+  function applyShared(data) {
+    const prev = {};
+    items.forEach(it => { prev[it.h] = it; });
+    const vocab = Array.isArray(data.vocab) ? data.vocab : [];
+    items = vocab.map(v => {
+      const o = prev[v.h] || {};
+      return normalizeItem({ h: v.h, p: v.p, m: v.m, l: v.l || '', ex: v.ex || '', known: o.known, level: o.level, due: o.due, flag: o.flag });
+    });
+    extraLessons = Array.isArray(data.lessons) ? data.lessons.filter(Boolean) : extraLessons;
+    lockedLessons = Array.isArray(data.lockedLessons) ? data.lockedLessons.filter(Boolean) : lockedLessons;
+    passages = Array.isArray(data.passages) ? data.passages : passages;
+    lastVocabJson = JSON.stringify({ vocab: items.map(it => ({ h: it.h, p: it.p, m: it.m, l: it.l || '', ex: it.ex || '' })), lessons: extraLessons, passages: passages, lockedLessons: lockedLessons });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    localStorage.setItem(LESSON_KEY, JSON.stringify(extraLessons));
+    saveLockedLessons();
+    savePassages();
+    rebuildOrder(); updateLessonFilter(); renderList(); renderGrid();
+  }
+  function subscribeShared() {
+    if (!db) return;
+    if (sharedUnsub) sharedUnsub();
+    sharedUnsub = db.collection('shared').doc('words').onSnapshot(snap => {
+      if (!snap.exists) { if (items.length || passages.length || lockedLessons.length) pushVocab(); return; }   // chưa có -> đẩy bản hiện tại lên
+      const data = snap.data();
+      const j = JSON.stringify({ vocab: data.vocab || [], lessons: data.lessons || [], passages: data.passages || [], lockedLessons: data.lockedLessons || [] });
+      if (j === lastVocabJson) return;   // chính mình vừa đẩy -> bỏ qua
+      applyShared(data);
+    }, () => {});
+  }
+
+  // ===== Bảng xếp hạng online =====
+  function submitAndLoadLeaderboard(t, pairs) {
+    const el = $('onlineLb');
+    if (!db) { if (el) el.innerHTML = '<p class="io-note">Cần có mạng để xem bảng xếp hạng chung.</p>'; return; }
+    const doSubmit = (name) => {
+      db.collection('leaderboard').add({ name: name, t: Math.round(t * 10) / 10, pairs: pairs, createdAt: Date.now() })
+        .then(() => loadLeaderboard(pairs)).catch(() => loadLeaderboard(pairs));
+    };
+    let name = (profile && profile.name) || localStorage.getItem('hanzi-player-name');
+    if (!name) {
+      showPromptModal('Nhập tên của bạn (hiện trên bảng xếp hạng):', '', (v) => {
+        name = (v || '').trim() || 'Ẩn danh';
+        localStorage.setItem('hanzi-player-name', name);
+        doSubmit(name);
+      });
+    } else doSubmit(name);
+  }
+  function loadLeaderboard(pairs) {
+    const el = $('onlineLb');
+    if (!db || !el) return;
+    el.innerHTML = '<p class="io-note">Đang tải…</p>';
+    // Lấy nhiều rồi lọc theo số cặp ở client (khỏi cần composite index)
+    db.collection('leaderboard').orderBy('t').limit(300).get().then(snap => {
+      const all = []; snap.forEach(d => all.push(d.data()));
+      const same = all.filter(s => Number(s.pairs) === Number(pairs));
+      if (!same.length) { el.innerHTML = '<p class="io-note">Chưa có ai trên bảng xếp hạng ' + pairs + ' cặp.</p>'; return; }
+      // Mỗi người chỉ giữ kết quả tốt nhất (đã sắp theo t tăng dần nên lần đầu gặp là nhanh nhất)
+      const seen = new Set(), rows = [];
+      same.forEach(s => {
+        const key = (s.name || '?').trim().toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key); rows.push(s);
+      });
+      el.innerHTML = rows.slice(0, 10).map((s, i) => `<div class="lb-row">
+        <span class="lb-pos">${i + 1}</span>
+        <span>${escapeHtml(s.name || '?')}</span>
+        <span class="lb-date">${s.pairs} cặp</span>
+        <span class="lb-time">${fmtTime(s.t)}</span>
+      </div>`).join('');
+    }).catch(e => { el.innerHTML = '<p class="io-note">Lỗi tải bảng xếp hạng: ' + escapeHtml(e.message) + '</p>'; });
+  }
+
+  // ===== Thành viên =====
+  let profile = null, memberPushTimer = null;
+  function loadProfile() { try { profile = JSON.parse(localStorage.getItem('hanzi-profile')); } catch (e) { profile = null; } }
+  function saveProfile() { localStorage.setItem('hanzi-profile', JSON.stringify(profile)); }
+
+  function pushMember() {
+    if (!db || !profile) return;
+    db.collection('members').doc(profile.id).set({
+      name: profile.name, dob: profile.dob || '',
+      score: profile.score || 0, sessions: profile.sessions || 0,
+      streak: profile.streak || 0, lastStudyDay: profile.lastStudyDay || '',
+      known: knownCount(), total: items.length, lastSeen: Date.now()
+    }, { merge: true }).catch(() => {});
+  }
+  // ===== Ngày & chuỗi ngày học liên tiếp =====
+  function dayStr(d) { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  function todayStr() { return dayStr(new Date()); }
+  function yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return dayStr(d); }
+  function updateStudyBanner() {
+    const el = $('studyBanner'); if (!el) return;
+    const due = dueCount();
+    const streak = (profile && profile.streak) || 0;
+    el.innerHTML = `<span class="sb-due">🔁 ${due} chữ cần ôn hôm nay</span>` +
+      (streak > 0 ? `<span class="sb-streak">🔥 Chuỗi ${streak} ngày</span>` : '');
+  }
+  function addPoints(n) {
+    if (!profile || !n) return;
+    profile.score = (profile.score || 0) + n;
+    saveProfile();
+    clearTimeout(memberPushTimer);
+    memberPushTimer = setTimeout(pushMember, 1200);
+  }
+  // ===== Đồng bộ TIẾN ĐỘ cá nhân lên đám mây theo mã đăng nhập =====
+  let progressPushTimer = null;
+  // Bản đồ tiến độ: chỉ lưu chữ có tiến triển (đã thuộc / có cấp / đánh dấu) cho gọn
+  function progressMap() {
+    const m = {};
+    items.forEach(it => {
+      if (it.known || it.flag || (it.level && it.level > 0)) {
+        m[it.h] = { k: it.known ? 1 : 0, lv: it.level || 0, due: it.due || 0, fl: it.flag ? 1 : 0 };
+      }
+    });
+    return m;
+  }
+  function pushProgress() {
+    if (!db || !profile) return;
+    const data = { progress: progressMap(), known: knownCount(), total: items.length, lastSeen: Date.now() };
+    const ref = db.collection('members').doc(profile.id);
+    // update GHI ĐÈ trọn 'progress' (bỏ cờ -> khóa cũ biến mất); set merge chỉ dùng khi doc chưa tồn tại
+    ref.update(data).catch(() => ref.set(data, { merge: true }).catch(() => {}));
+  }
+  function scheduleProgressPush() {
+    if (!db || !profile) return;
+    clearTimeout(progressPushTimer);
+    progressPushTimer = setTimeout(pushProgress, 1500);
+  }
+  // Gộp tiến độ từ đám mây vào dữ liệu máy này (hợp nhất, không làm mất "đã thuộc")
+  function applyCloudProgress(map) {
+    if (!map) return false;
+    let changed = false;
+    items.forEach(it => {
+      const p = map[it.h];
+      if (!p) return;
+      const nk = it.known || !!p.k, nf = it.flag || !!p.fl;
+      const nl = Math.max(it.level || 0, p.lv || 0), nd = Math.max(it.due || 0, p.due || 0);
+      if (nk !== !!it.known || nf !== !!it.flag || nl !== (it.level || 0) || nd !== (it.due || 0)) {
+        it.known = nk; it.flag = nf; it.level = nl; it.due = nd; changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      renderList(); renderGrid(); updateQuizStat();
+    }
+    return changed;
+  }
+  // Lưu kết quả từng lần làm bài (kiểm tra / ghép thẻ) vào hồ sơ + đám mây (giữ 20 lần gần nhất)
+  function recordResult(kind, r) {
+    if (!profile) return;
+    const key = kind === 'quiz' ? 'quizResults' : 'gameResults';
+    profile[key] = [r].concat(profile[key] || []).slice(0, 20);
+    saveProfile();
+    if (db) db.collection('members').doc(profile.id).set({ [key]: profile[key] }, { merge: true }).catch(() => {});
+  }
+  // Mã thành viên = họ tên (bỏ dấu, gọn) + ngày sinh -> đăng nhập lại cùng tên+ngày sinh là khớp
+  function memberKey(name, dob) {
+    const n = removeTones((name || '').trim().toLowerCase()).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    return n + '_' + (dob || '');
+  }
+  // Nạp các lựa chọn Ngày / Tháng / Năm cho ô đăng ký
+  function fillDobSelects() {
+    const dEl = $('regDay'), mEl = $('regMonth'), yEl = $('regYear');
+    if (!dEl || dEl.options.length) return;   // đã nạp rồi thì thôi
+    const opt = (v, t) => `<option value="${v}">${t}</option>`;
+    let dh = opt('', 'Ngày');
+    for (let i = 1; i <= 31; i++) dh += opt(i, i);
+    dEl.innerHTML = dh;
+    let mh = opt('', 'Tháng');
+    for (let i = 1; i <= 12; i++) mh += opt(i, 'Tháng ' + i);
+    mEl.innerHTML = mh;
+    const nowY = new Date().getFullYear();
+    let yh = opt('', 'Năm');
+    for (let y = nowY; y >= 1980; y--) yh += opt(y, y);
+    yEl.innerHTML = yh;
+  }
+  function showRegModal(cb) {
+    const modal = $('regModal');
+    if (!modal) {
+      const name = prompt('Họ và tên:');
+      const dob = prompt('Ngày sinh (yyyy-mm-dd):');
+      cb((name || 'Bạn').trim(), (dob || '').trim());
+      return;
+    }
+    fillDobSelects();
+    modal.classList.add('active');
+    setTimeout(() => $('regName').focus(), 50);
+    $('regSubmit').onclick = () => {
+      const name = $('regName').value.trim();
+      const d = $('regDay').value, mo = $('regMonth').value, y = $('regYear').value;
+      if (!name) { showAlert('Vui lòng nhập họ và tên.'); $('regName').focus(); return; }
+      if (!d || !mo || !y) { showAlert('Vui lòng chọn đủ Ngày, Tháng, Năm sinh.'); return; }
+      const pad = n => String(n).padStart(2, '0');
+      const dob = y + '-' + pad(mo) + '-' + pad(d);   // luôn yyyy-mm-dd, không phụ thuộc máy
+      modal.classList.remove('active');
+      cb(name, dob);
+    };
+  }
+  // Hoàn tất hồ sơ: gộp điểm/tiến độ từ đám mây theo mã (nếu có), tăng số phiên
+  function finalizeProfile(p) {
+    const apply = (ex) => {
+      profile = {
+        id: p.id,
+        name: p.name || (ex && ex.name) || 'Bạn',
+        dob: p.dob || (ex && ex.dob) || '',
+        score: ex ? (ex.score || 0) : (p.score || 0),
+        sessions: (ex ? (ex.sessions || 0) : 0) + 1,
+        createdAt: (ex && ex.createdAt) || Date.now()
+      };
+      // Chuỗi ngày học liên tiếp
+      const today = todayStr();
+      const last = ex ? (ex.lastStudyDay || '') : '';
+      let streak = ex ? (ex.streak || 0) : 0;
+      if (last !== today) streak = (last === yesterdayStr()) ? streak + 1 : 1;
+      profile.streak = streak; profile.lastStudyDay = today;
+      saveProfile();
+      // Khôi phục tiến độ học từ đám mây (đăng nhập lại / máy khác) rồi đẩy bản hợp nhất lên
+      if (ex && ex.progress) applyCloudProgress(ex.progress);
+      pushMember();
+      updateStudyBanner();
+    };
+    if (db) db.collection('members').doc(p.id).get().then(s => apply(s.exists ? s.data() : null)).catch(() => apply(null));
+    else apply(null);
+  }
+  // Gộp dữ liệu 2 hồ sơ (cũ + mới) — ưu tiên giữ tiến độ cao hơn, không làm mất gì
+  function mergeMemberData(a, b) {
+    a = a || {}; b = b || {};
+    const prog = {};
+    [a.progress || {}, b.progress || {}].forEach(pg => {
+      Object.keys(pg).forEach(h => {
+        const e = pg[h] || {}, c = prog[h] || {};
+        prog[h] = { k: Math.max(c.k || 0, e.k || 0), lv: Math.max(c.lv || 0, e.lv || 0), due: Math.max(c.due || 0, e.due || 0), fl: Math.max(c.fl || 0, e.fl || 0) };
+      });
+    });
+    return {
+      name: b.name || a.name || 'Bạn', dob: b.dob || a.dob || '',
+      score: Math.max(a.score || 0, b.score || 0),
+      sessions: Math.max(a.sessions || 0, b.sessions || 0),
+      streak: Math.max(a.streak || 0, b.streak || 0),
+      lastStudyDay: (a.lastStudyDay || '') > (b.lastStudyDay || '') ? a.lastStudyDay : b.lastStudyDay,
+      known: Math.max(a.known || 0, b.known || 0), total: Math.max(a.total || 0, b.total || 0),
+      quizResults: (b.quizResults || []).concat(a.quizResults || []).slice(0, 20),
+      gameResults: (b.gameResults || []).concat(a.gameResults || []).slice(0, 20),
+      progress: prog
+    };
+  }
+  // Chuyển dữ liệu từ ID cũ sang ID chuẩn (tên+ngày sinh) rồi xóa ID cũ -> hết trùng tài khoản
+  function migrateMember(oldId, newId, done) {
+    const col = db.collection('members');
+    Promise.all([col.doc(oldId).get(), col.doc(newId).get()]).then(([o, n]) => {
+      if (!o.exists) { done(); return; }
+      const merged = mergeMemberData(o.data(), n.exists ? n.data() : null);
+      col.doc(newId).set(merged, { merge: true })
+        .then(() => col.doc(oldId).delete().catch(() => {}))
+        .then(done).catch(done);
+    }).catch(done);
+  }
+  function ensureProfile() {
+    loadProfile();
+    if (profile && profile.id) {
+      const canonical = (profile.name && profile.dob) ? memberKey(profile.name, profile.dob) : profile.id;
+      if (db && canonical !== profile.id) {
+        // hồ sơ cũ (ID ngẫu nhiên) -> gộp sang ID tên+ngày sinh để khỏi trùng
+        migrateMember(profile.id, canonical, () =>
+          finalizeProfile({ id: canonical, name: profile.name, dob: profile.dob }));
+      } else {
+        finalizeProfile({ id: profile.id, name: profile.name, dob: profile.dob, score: profile.score });
+      }
+      return;
+    }
+    showRegModal((name, dob) => {
+      finalizeProfile({ id: memberKey(name, dob), name: name, dob: dob, score: 0 });
+    });
+  }
+  // Đặt lại tiến độ trên máy này (để nạp tiến độ của tài khoản khác cho sạch)
+  function resetLocalProgress() {
+    items.forEach(it => { it.known = false; it.level = 0; it.due = 0; it.flag = false; });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    renderList(); renderGrid(); updateQuizStat();
+  }
+  function switchAccount() {
+    clearTimeout(progressPushTimer); clearTimeout(memberPushTimer);
+    profile = null;
+    localStorage.removeItem('hanzi-profile');
+    resetLocalProgress();
+    ensureProfile();
+  }
+  if ($('profileBtn')) $('profileBtn').onclick = () => {
+    const who = profile ? (profile.name + (profile.dob ? ' · ' + profile.dob : '')) : 'Chưa đăng nhập';
+    showModal('Tài khoản hiện tại:\n' + who, [
+      { text: 'Đóng', className: 'btn-cancel' },
+      { text: '🔁 Đăng nhập / đổi tài khoản', className: 'btn-gold',
+        onClick: () => showConfirm('Đổi sang tài khoản khác? Tiến độ trên máy này sẽ được thay bằng tiến độ của tài khoản bạn đăng nhập.', switchAccount) }
+    ]);
+  };
+  function onlineLevel(s) {
+    return s >= 20 ? 'Rất tích cực 🔥' : s >= 8 ? 'Khá thường xuyên' : s >= 3 ? 'Thỉnh thoảng' : 'Mới tham gia';
+  }
+  function memberDetailHtml(m) {
+    const quiz = Array.isArray(m.quizResults) ? m.quizResults : [];
+    const game = Array.isArray(m.gameResults) ? m.gameResults : [];
+    const quizRows = quiz.length
+      ? quiz.map(r => `<div class="md-row">
+          <span class="md-date">${escapeHtml(r.d || '')}</span>
+          <span class="md-type">${r.mc ? 'Trắc nghiệm' : 'Lật thẻ'}</span>
+          <span class="md-main"><b>${r.k}/${r.total}</b> (${r.pct}%)</span>
+          <span class="md-time">⏱ ${escapeHtml(r.time || '')}</span>
+        </div>`).join('')
+      : '<p class="io-note">Chưa có lần kiểm tra nào.</p>';
+    const gameRows = game.length
+      ? game.map(r => `<div class="md-row">
+          <span class="md-date">${escapeHtml(r.d || '')}</span>
+          <span class="md-main">${r.pairs} cặp</span>
+          <span class="md-time">⏱ ${fmtTime(r.t)}</span>
+        </div>`).join('')
+      : '<p class="io-note">Chưa có lần ghép thẻ nào.</p>';
+    const clearBtn = (quiz.length || game.length)
+      ? `<button class="btn-danger md-clear" data-id="${escapeHtml(m.id || '')}">🗑 Xóa lịch sử kết quả</button>`
+      : '';
+    const delBtn = `<button class="btn-danger md-del" data-id="${escapeHtml(m.id || '')}" data-name="${escapeHtml(m.name || '')}">❌ Xóa thành viên này</button>`;
+    return `<div class="md-sec"><div class="md-title">📝 Kiểm tra (${quiz.length})</div>${quizRows}</div>
+      <div class="md-sec"><div class="md-title">🎮 Ghép thẻ (${game.length})</div>${gameRows}</div>
+      <div class="md-actions">${clearBtn}${delBtn}</div>`;
+  }
+
+  // ===== "Chữ khó của lớp" — chỉ tính chữ học sinh gắn cờ ⚑; xổ xuống xem ai gắn =====
+  function renderClassDifficulty(rows) {
+    const el = $('classDiff'); if (!el) return;
+    if (!items.length || !rows.length) { el.innerHTML = ''; return; }
+    const byH = {};
+    items.forEach(it => { byH[it.h] = { h: it.h, p: it.p, m: it.m, names: [] }; });
+    rows.forEach(m => {
+      const pg = m.progress || {};
+      items.forEach(it => { const e = pg[it.h]; if (e && e.fl) byH[it.h].names.push(m.name || '?'); });
+    });
+    const arr = Object.values(byH).filter(x => x.names.length).sort((a, b) => b.names.length - a.names.length);
+    if (!arr.length) {
+      el.innerHTML = '<div class="class-diff"><div class="cd-title">📊 Chữ khó của lớp</div><p class="io-note">Chưa có chữ nào được học sinh gắn cờ ⚑.</p></div>';
+      return;
+    }
+    el.innerHTML = `<div class="class-diff">
+      <div class="cd-title">📊 Chữ khó của lớp <span class="cd-sub">(chữ được gắn cờ ⚑ — bấm để xem ai gắn)</span></div>
+      ${arr.map((x, i) => `<div class="cd-item">
+        <div class="cd-row cd-clickable" data-i="${i}">
+          <span class="cd-h">${escapeHtml(x.h)}</span>
+          <span class="cd-stat">⚑ ${x.names.length} bạn <span class="cd-caret">▸</span></span>
+        </div>
+        <div class="cd-names" id="cdNames${i}" style="display:none;">
+          <div class="cd-detail"><span class="cd-p">${colorPinyin(x.p) || '—'}</span><span class="cd-m">${escapeHtml(x.m) || ''}</span></div>
+          <div class="cd-who">${x.names.map(n => `<span class="cs-chip">${escapeHtml(n)}</span>`).join('')}</div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+    el.querySelectorAll('.cd-clickable').forEach(row => {
+      row.addEventListener('click', () => {
+        const d = $('cdNames' + row.dataset.i);
+        const caret = row.querySelector('.cd-caret');
+        const open = d.style.display !== 'none';
+        d.style.display = open ? 'none' : 'flex';
+        if (caret) caret.textContent = open ? '▸' : '▾';
+      });
+    });
+  }
+  function exportMembersCsv(rows) {
+    if (!rows || !rows.length) { showAlert('Chưa có thành viên để xuất.'); return; }
+    const head = ['Tên', 'Ngày sinh', 'Điểm', 'Đã thuộc', 'Tổng', 'Chuỗi ngày', 'Số phiên'];
+    const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = [head.map(esc).join(',')];
+    rows.forEach(m => lines.push([m.name, m.dob, m.score || 0, m.known || 0, m.total || 0, m.streak || 0, m.sessions || 0].map(esc).join(',')));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'diem-lop-' + todayStr() + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  let lastMembers = [];
+  if ($('exportMembersBtn')) $('exportMembersBtn').onclick = () => exportMembersCsv(lastMembers);
+  let lastDiffRows = [];
+  function renderClassDiffPage() {
+    const el = $('classDiff'); if (!el) return;
+    if (!db) { el.innerHTML = '<p class="empty-msg">Cần có mạng để xem.</p>'; return; }
+    el.innerHTML = '<p class="io-note">Đang tải…</p>';
+    db.collection('members').limit(100).get().then(snap => {
+      const rows = []; snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+      lastDiffRows = rows;
+      renderClassDifficulty(rows);
+      if (!el.innerHTML) el.innerHTML = '<p class="empty-msg">Chưa có dữ liệu — học sinh cần học/đánh dấu chữ trước.</p>';
+    }).catch(e => { el.innerHTML = '<p class="io-note">Lỗi: ' + escapeHtml(e.message) + '</p>'; });
+  }
+  if ($('refreshDiffBtn')) $('refreshDiffBtn').onclick = renderClassDiffPage;
+  // Xóa "dấu khó" (⚑) của cả lớp — xóa trên đám mây + báo các máy học sinh tự gỡ cờ
+  if ($('clearDiffBtn')) $('clearDiffBtn').onclick = () => {
+    showConfirm('Xóa toàn bộ "đánh dấu khó" (⚑) của cả lớp? Cờ lưu ý trên máy học sinh cũng sẽ tự mất ở lần mở app kế tiếp. Tiến độ đã thuộc KHÔNG bị ảnh hưởng.', () => {
+      if (!db) return;
+      const stamp = Date.now();
+      const batch = db.batch();
+      // 1) gỡ cờ trong dữ liệu đám mây của từng học sinh (giữ nguyên đã thuộc / cấp độ)
+      lastDiffRows.forEach(m => {
+        if (!m.progress || !Object.keys(m.progress).length) return;
+        const np = {};
+        Object.keys(m.progress).forEach(h => { np[h] = { ...m.progress[h], fl: 0 }; });
+        batch.set(db.collection('members').doc(m.id), { progress: np }, { merge: true });
+      });
+      // 2) đánh dấu mốc reset để mọi máy học sinh tự gỡ cờ khi đồng bộ
+      batch.set(db.collection('shared').doc('config'), { flagsResetAt: stamp }, { merge: true });
+      batch.commit()
+        .then(() => { showAlert('Đã xóa dấu khó của cả lớp. Máy học sinh sẽ tự cập nhật.'); renderClassDiffPage(); })
+        .catch(e => showAlert('Lỗi: ' + e.message));
+    });
+  };
+  // Gỡ tất cả cờ "lưu ý" trên máy này (khi giáo viên xóa dấu khó)
+  function clearLocalFlags() {
+    let changed = false;
+    items.forEach(it => { if (it.flag) { it.flag = false; changed = true; } });
+    if (changed) { save(); renderGrid(); updateStudyBanner(); }
+  }
+
+  function renderMembersPage() {
+    const el = $('membersList');
+    if (!el) return;
+    if (!db) { el.innerHTML = '<p class="empty-msg">Cần có mạng để xem danh sách thành viên.</p>'; return; }
+    el.innerHTML = '<p class="io-note">Đang tải…</p>';
+    db.collection('members').orderBy('score', 'desc').limit(100).get().then(snap => {
+      const rows = []; snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+      lastMembers = rows;
+      if (!rows.length) { el.innerHTML = '<p class="empty-msg">Chưa có thành viên nào.</p>'; return; }
+      el.innerHTML = rows.map((m, i) => {
+        const pct = m.total ? Math.round((m.known || 0) / m.total * 100) : 0;
+        const me = profile && m.name === profile.name ? ' style="border-color:var(--gold-2);"' : '';
+        // Top 3 điểm tích cực: thêm hiệu ứng sống động + huy chương
+        const topCls = (m.score || 0) > 0 && i < 3 ? ` member-top member-top${i + 1}` : '';
+        const medal = ['🥇', '🥈', '🥉'][i];
+        const rankInner = topCls ? `<span class="member-medal">${medal}</span>` : (i + 1);
+        return `<div class="member-row member-clickable${topCls}" data-idx="${i}"${me}>
+          <div class="member-rank">${rankInner}</div>
+          <div class="member-info">
+            <div class="member-name">${escapeHtml(m.name || '?')} <span class="member-caret">▸</span></div>
+            <div class="member-sub">${m.dob ? '🎂 ' + escapeHtml(m.dob) + ' · ' : ''}Online: ${onlineLevel(m.sessions || 0)}</div>
+          </div>
+          <div class="member-stats">
+            <span class="member-score">⭐ ${m.score || 0} điểm</span>
+            <span class="member-prog">Tiến độ: ${m.known || 0}/${m.total || 0} (${pct}%)</span>
+          </div>
+        </div>
+        <div class="member-detail" id="memDetail${i}" style="display:none;"></div>`;
+      }).join('');
+      el.querySelectorAll('.member-clickable').forEach(row => {
+        row.addEventListener('click', () => {
+          const i = row.dataset.idx;
+          const det = $('memDetail' + i);
+          const caret = row.querySelector('.member-caret');
+          const open = det.style.display !== 'none';
+          if (open) { det.style.display = 'none'; if (caret) caret.textContent = '▸'; return; }
+          if (!det.innerHTML) {
+            const bindDetail = () => {
+              det.innerHTML = memberDetailHtml(rows[i]);
+              const cb = det.querySelector('.md-clear');
+              if (cb) cb.onclick = () => {
+                showConfirm('Xóa toàn bộ lịch sử kết quả của "' + (rows[i].name || '?') + '"?', () => {
+                  db.collection('members').doc(cb.dataset.id)
+                    .set({ quizResults: [], gameResults: [] }, { merge: true })
+                    .then(() => { rows[i].quizResults = []; rows[i].gameResults = []; bindDetail(); })
+                    .catch(e => showAlert('Lỗi: ' + e.message));
+                });
+              };
+              const db2 = det.querySelector('.md-del');
+              if (db2) db2.onclick = () => {
+                showConfirm('Xóa hẳn thành viên "' + (rows[i].name || '?') + '" khỏi danh sách? (dùng để dọn tài khoản trùng)', () => {
+                  db.collection('members').doc(db2.dataset.id).delete()
+                    .then(renderMembersPage)
+                    .catch(e => showAlert('Lỗi: ' + e.message));
+                });
+              };
+            };
+            bindDetail();
+          }
+          det.style.display = 'block';
+          if (caret) caret.textContent = '▾';
+        });
+      });
+    }).catch(e => { el.innerHTML = '<p class="io-note">Lỗi: ' + escapeHtml(e.message) + '</p>'; });
+  }
+  if ($('refreshMembersBtn')) $('refreshMembersBtn').onclick = renderMembersPage;
+
+  // ===== Chuyển chế độ Học sinh / Giáo viên =====
+  let teacherPass = 'kinkin2002';   // mặc định; sẽ lấy từ Firebase nếu đã đổi
+  if (db) db.collection('shared').doc('config').onSnapshot(s => {
+    if (!s.exists) return;
+    const data = s.data();
+    if (data.teacherPass) teacherPass = data.teacherPass;
+    // Giáo viên đã "Xóa dấu khó" -> gỡ cờ trên máy này (mỗi mốc chỉ xử lý một lần)
+    if (data.flagsResetAt) {
+      const seen = Number(localStorage.getItem('hanzi-flags-reset') || 0);
+      if (data.flagsResetAt > seen) {
+        localStorage.setItem('hanzi-flags-reset', String(data.flagsResetAt));
+        clearLocalFlags();
+      }
+    }
+  }, () => {});
+  function applyRole(role) {
+    role = role === 'teacher' ? 'teacher' : 'student';
+    // Chế độ Giáo viên cần mật khẩu (nhớ trên máy sau khi nhập đúng 1 lần)
+    if (role === 'teacher' && localStorage.getItem('hanzi-teacher-ok') !== '1') {
+      showPromptModal('🔒 Nhập mật khẩu giáo viên:', '', (v) => {
+        if ((v || '').trim() === teacherPass) {
+          localStorage.setItem('hanzi-teacher-ok', '1');
+          applyRole('teacher');
+        } else {
+          showAlert('Mật khẩu không đúng.');
+          applyRole('student');
+        }
+      });
+      return;
+    }
+    document.body.classList.toggle('role-teacher', role === 'teacher');
+    document.body.classList.toggle('role-student', role !== 'teacher');
+    document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === role));
+    localStorage.setItem('hanzi-role', role);
+    updateLessonFilter(); // cập nhật danh sách bài học
+    // Mở tab đầu tiên của chế độ đó
+    const firstTab = document.querySelector('.tab[data-role="' + role + '"]');
+    if (firstTab) firstTab.click();
+  }
+  document.querySelectorAll('.role-btn').forEach(b => {
+    b.addEventListener('click', () => applyRole(b.dataset.role));
+  });
+  // Đổi mật khẩu giáo viên (lưu lên Firebase -> dùng chung mọi máy)
+  if ($('changePassBtn')) $('changePassBtn').onclick = () => {
+    showPromptModal('Nhập mật khẩu MỚI cho giáo viên:', '', (v) => {
+      v = (v || '').trim();
+      if (!v) { showAlert('Mật khẩu không được để trống.'); return; }
+      teacherPass = v;
+      if (db) db.collection('shared').doc('config').set({ teacherPass: v }, { merge: true }).catch(() => {});
+      showAlert('Đã đổi mật khẩu giáo viên thành: ' + v);
+    });
+  };
+
+  // ===== Bài khóa: Giáo viên soạn =====
+  let paEditIndex = -1;
+  function setPaEditMode(on) {
+    if ($('paAddBtn')) $('paAddBtn').textContent = on ? '💾 Lưu thay đổi' : '+ Thêm bài khóa';
+  }
+  // Đổi giao diện form theo kiểu (build / qa / free)
+  function syncPaType() {
+    const t = $('paType') ? $('paType').value : 'build';
+    if ($('paQField')) $('paQField').style.display = (t === 'qa' || t === 'free') ? '' : 'none';
+    if ($('paSLabel')) {
+      if (t === 'free') $('paSLabel').textContent = 'Gợi ý trả lời (không bắt buộc)';
+      else $('paSLabel').textContent = (t === 'qa') ? 'Câu TRẢ LỜI — các TỪ cách nhau bằng dấu cách' : 'Câu chữ Hán — các TỪ cách nhau bằng dấu cách';
+    }
+  }
+  if ($('paType')) $('paType').addEventListener('change', syncPaType);
+
+  function clearPaForm() {
+    if ($('paS')) $('paS').value = '';
+    if ($('paM')) $('paM').value = '';
+    if ($('paQ')) $('paQ').value = '';
+  }
+  let paGroupCollapsed = { build: true, qa: true, free: true };
+  function renderPassageEdit() {
+    const el = $('paList');
+    if ($('paCount')) $('paCount').textContent = passages.length;
+    if (!el) return;
+    if (!passages.length) { el.innerHTML = '<p class="empty-msg" style="padding:16px 0;">Chưa có bài khóa nào.</p>'; return; }
+    el.innerHTML = '';
+
+    const groups = {
+      'build': { title: '🧩 Ghép câu', items: [] },
+      'qa': { title: '❓ Trả lời câu hỏi', items: [] },
+      'free': { title: '💬 Vấn đáp (Trả lời tự do)', items: [] }
+    };
+    passages.forEach((p, i) => {
+      const t = p.type || 'build';
+      if (!groups[t]) groups[t] = { title: 'Loại khác', items: [] };
+      groups[t].items.push({ p, i });
+    });
+
+    for (const [key, group] of Object.entries(groups)) {
+      if (group.items.length === 0) continue;
+
+      const header = document.createElement('div');
+      header.className = 'pa-group-header';
+      const isCollapsed = paGroupCollapsed[key];
+      header.innerHTML = `<span>${group.title} (${group.items.length})</span> <span style="font-size: 0.9em;">${isCollapsed ? '▼ Hiện' : '▲ Ẩn'}</span>`;
+      header.onclick = () => {
+        paGroupCollapsed[key] = !paGroupCollapsed[key];
+        renderPassageEdit();
+      };
+      el.appendChild(header);
+
+      if (!isCollapsed) {
+        const listContainer = document.createElement('div');
+        listContainer.style.cssText = 'padding-left: 8px; margin-top: 8px; border-left: 2px solid var(--gold-3); margin-left: 8px;';
+        group.items.forEach(({ p, i }) => {
+          const isQA = p.type === 'qa';
+          const isFree = p.type === 'free';
+          const row = document.createElement('div');
+          row.className = 'pa-item' + (i === paEditIndex ? ' editing' : '');
+          row.style.marginTop = '8px';
+          let head = escapeHtml(p.s);
+          if (isQA) head = '❓ ' + escapeHtml(p.q || '') + ' → ' + escapeHtml(p.s);
+          if (isFree) head = '💬 ' + escapeHtml(p.q || '') + (p.s ? (' (Gợi ý: ' + escapeHtml(p.s) + ')') : '');
+          row.innerHTML = `<div class="pa-info"><div class="pa-s">${head}</div><div class="pa-m">${escapeHtml(p.m || '')}</div></div>`;
+          const acts = document.createElement('div');
+          acts.style.cssText = 'display:flex; gap:6px;';
+          const edit = document.createElement('button');
+          edit.className = 'btn-cancel'; edit.textContent = 'Sửa';
+          edit.style.cssText = 'padding:7px 12px; font-size:.85rem; border-radius:9px;';
+          edit.onclick = () => {
+            paEditIndex = i;
+            if ($('paType')) $('paType').value = p.type || 'build';
+            syncPaType();
+            $('paS').value = p.s; $('paM').value = p.m || ''; if ($('paQ')) $('paQ').value = p.q || '';
+            setPaEditMode(true);
+            renderPassageEdit();
+            $('paType').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          };
+          const del = document.createElement('button');
+          del.className = 'btn-danger'; del.textContent = 'Xoá';
+          del.style.cssText = 'padding:7px 12px; font-size:.85rem; border-radius:9px;';
+          del.onclick = () => {
+            showConfirm('Xoá bài khóa này?', () => {
+              passages.splice(i, 1);
+              if (paEditIndex === i) { paEditIndex = -1; clearPaForm(); setPaEditMode(false); }
+              savePassages(); renderPassageEdit();
+            });
+          };
+          acts.append(edit, del);
+          if (isFree) {
+            const viewAns = document.createElement('button');
+            viewAns.className = 'btn-gold'; viewAns.textContent = 'Xem đáp án';
+            viewAns.style.cssText = 'padding:7px 12px; font-size:.85rem; border-radius:9px; margin-left: 6px;';
+            
+            const answersContainer = document.createElement('div');
+            answersContainer.className = 'pa-answers-container';
+            answersContainer.style.display = 'none';
+            
+            let answersLoaded = false;
+
+            viewAns.onclick = () => {
+              const isHidden = answersContainer.style.display === 'none';
+              if (isHidden) {
+                answersContainer.style.display = 'block';
+                viewAns.textContent = 'Ẩn đáp án';
+                
+                if (!answersLoaded) {
+                  answersContainer.innerHTML = '<p style="margin:0; opacity:0.8;">Đang tải dữ liệu...</p>';
+                  if (typeof db !== 'undefined' && db) {
+                    db.collection('submissions').where('q', '==', p.q).get().then(snap => {
+                      let answers = [];
+                      snap.forEach(doc => answers.push({ id: doc.id, ...doc.data() }));
+                      answers.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+                      
+                      if (answers.length === 0) {
+                        answersContainer.innerHTML = '<p style="margin:0; opacity:0.8; font-style:italic;">Chưa có học sinh nào nộp đáp án cho câu hỏi này.</p>';
+                      } else {
+                        answersContainer.innerHTML = ''; // clear loading
+                        const listDiv = document.createElement('div');
+                        listDiv.style.cssText = 'display:flex; flex-direction:column; gap:12px;';
+                        
+                        answers.forEach(a => {
+                          let dateStr = 'Mới đây';
+                          if (a.timestamp) {
+                             const d = a.timestamp.toDate();
+                             dateStr = d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
+                          }
+                          
+                          const ansDiv = document.createElement('div');
+                          ansDiv.className = 'pa-answer-item';
+                          
+                          ansDiv.innerHTML = `
+                            <div class="pa-answer-head">
+                              <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                                <strong style="color:var(--gold-1); font-size: 1.1rem; letter-spacing:0.02em;">👤 ${escapeHtml(a.studentName)}</strong>
+                                <span style="font-size:0.8rem; opacity:0.8;">🕒 ${dateStr}</span>
+                              </div>
+                              <div class="ans-meta" style="margin-left: 8px;"></div>
+                            </div>
+                            <div class="pa-answer-text">${escapeHtml(a.answer)}</div>
+                          `;
+                          
+                          const delBtn = document.createElement('button');
+                          delBtn.innerHTML = '🗑️ Xoá';
+                          delBtn.style.cssText = 'background:rgba(255,50,50,0.1); border:none; color:#ff4d4f; border-radius:6px; cursor:pointer; font-size:0.85rem; padding:6px 12px; transition:0.2s; font-weight:bold; white-space:nowrap;';
+                          delBtn.onmouseover = () => delBtn.style.background = 'rgba(255,50,50,0.2)';
+                          delBtn.onmouseout = () => delBtn.style.background = 'rgba(255,50,50,0.1)';
+                          delBtn.onclick = () => {
+                             if (confirm('Xoá câu trả lời này?')) {
+                                db.collection('submissions').doc(a.id).delete().then(() => {
+                                   ansDiv.remove();
+                                   if (listDiv.children.length === 0) {
+                                      answersContainer.innerHTML = '<p style="margin:0; color:#777; font-style:italic;">Chưa có học sinh nào nộp đáp án cho câu hỏi này.</p>';
+                                   }
+                                }).catch(err => alert('Lỗi: ' + err));
+                             }
+                          };
+                          ansDiv.querySelector('.ans-meta').appendChild(delBtn);
+                          listDiv.appendChild(ansDiv);
+                        });
+                        answersContainer.appendChild(listDiv);
+                        answersLoaded = true;
+                      }
+                    }).catch(err => {
+                      console.error(err);
+                      answersContainer.innerHTML = '<p style="margin:0; color:red;">Lỗi tải dữ liệu. Vui lòng kiểm tra kết nối mạng.</p>';
+                    });
+                  } else {
+                     answersContainer.innerHTML = '<p style="margin:0; color:red;">Cơ sở dữ liệu chưa sẵn sàng.</p>';
+                  }
+                }
+              } else {
+                answersContainer.style.display = 'none';
+                viewAns.textContent = 'Xem đáp án';
+              }
+            };
+            acts.append(viewAns);
+            row.appendChild(acts);
+            
+            const wrapper = document.createElement('div');
+            wrapper.appendChild(row);
+            wrapper.appendChild(answersContainer);
+            listContainer.appendChild(wrapper);
+          } else {
+            row.appendChild(acts);
+            listContainer.appendChild(row);
+          }
+        });
+        el.appendChild(listContainer);
+      }
+    }
+  }
+  if ($('paAddBtn')) $('paAddBtn').onclick = () => {
+    const type = $('paType') ? $('paType').value : 'build';
+    const s = $('paS').value.trim().replace(/\s+/g, ' ');
+    const m = $('paM').value.trim();
+    const q = $('paQ') ? $('paQ').value.trim() : '';
+    if (type !== 'free' && !s) { $('paS').focus(); return; }
+    if ((type === 'qa' || type === 'free') && !q) { $('paQ').focus(); return; }
+    const obj = { type: type, s: s, m: m, q: q };
+    if (paEditIndex >= 0 && passages[paEditIndex]) {
+      passages[paEditIndex] = obj;   // lưu sửa
+      paEditIndex = -1; setPaEditMode(false);
+    } else {
+      passages.push(obj);            // thêm mới
+    }
+    savePassages(); renderPassageEdit();
+    clearPaForm();
+    $('paS').focus();
+  };
+
+  // ===== Bài khóa: Học sinh làm (ghép câu) =====
+  let paQueue = [], paPos = 0, paLast = -1, paQueueKey = '', paCurrent = -1, paIsCorrect = false;
+  function paMode() { return $('paModeFilter') ? $('paModeFilter').value : 'all'; }
+  function paFilteredIdx() {
+    const mode = paMode();
+    return passages.map((_, i) => i).filter(i => mode === 'all' || (passages[i].type || 'build') === mode);
+  }
+  if ($('paModeFilter')) $('paModeFilter').addEventListener('change', () => { paQueueKey = ''; renderPassageExercise(); });
+  // Gọi khi mở trang / bấm "Câu khác": đi lần lượt qua các câu (theo loại đã chọn), không lặp
+  function renderPassageExercise() {
+    const stage = $('passageStage');
+    const pool = paFilteredIdx();
+    if (!pool.length) {
+      if (stage) stage.innerHTML = '<p class="empty-msg">Chưa có bài khóa loại này. Giáo viên hãy vào "Soạn bài khóa" để thêm.</p>';
+      return;
+    }
+    const key = paMode() + ':' + passages.length;
+    if (paQueueKey !== key) {
+      paQueue = pool.slice();
+      shuffleArr(paQueue);
+      paQueueKey = key;
+      paPos = 0;
+      paIsCorrect = false;
+    } else {
+      if (paCurrent !== -1 && !paIsCorrect && paPos <= paQueue.length) {
+        paQueue.push(paCurrent); // push back to the end of queue if skipped/wrong
+      }
+    }
+
+    if (paPos >= paQueue.length) {
+      if (stage) stage.innerHTML = `
+        <div style="text-align:center; padding: 40px 20px;">
+          <h3 style="color:var(--gold-1); font-size:1.8rem; margin-bottom:15px;">🎉 Chúc mừng!</h3>
+          <p style="color:var(--muted); margin-bottom:25px;">Bạn đã hoàn thành tất cả bài khóa ở mục này.</p>
+          <button class="btn-gold" id="restartPassageBtn">🔄 Ôn lại từ đầu</button>
+        </div>
+      `;
+      if ($('restartPassageBtn')) {
+        $('restartPassageBtn').onclick = () => {
+          paQueueKey = ''; // reset queue
+          renderPassageExercise();
+        };
+      }
+      return;
+    }
+
+    paIsCorrect = false;
+    paCurrent = paQueue[paPos++];
+    paLast = paCurrent;
+    showPassage(paCurrent);
+  }
+  // Hiển thị 1 câu cụ thể (dùng cho "Làm lại" — xáo lại đúng câu hiện tại)
+  function showPassage(idx) {
+    const stage = $('passageStage');
+    if (!stage || !passages[idx]) return;
+    const p = passages[idx];
+    const words = p.s.split(/\s+/).filter(Boolean);
+    const shuffled = words.map(w => w).sort(() => Math.random() - 0.5);
+
+    let promptHtml;
+    if (p.type === 'qa') {
+      promptHtml = '<div class="pa-label">Trả lời câu hỏi</div><div class="pa-q">' + escapeHtml(p.q || '') + '</div>'
+        + (p.m ? '<div class="pa-hint" style="margin-top:6px;">(' + escapeHtml(p.m) + ')</div>' : '');
+    } else if (p.type === 'free') {
+      promptHtml = '<div class="pa-label">Vấn đáp (Trả lời tự do)</div><div class="pa-q">' + escapeHtml(p.q || '') + '</div>'
+        + (p.m ? '<div class="pa-hint" style="margin-top:6px;">(' + escapeHtml(p.m) + ')</div>' : '');
+    } else if (p.m) {
+      promptHtml = '<div class="pa-label">Ghép câu có nghĩa</div><div class="pa-mean">' + escapeHtml(p.m) + '</div>';
+    } else {
+      promptHtml = '<div class="pa-label">Sắp xếp các từ thành câu đúng</div>';
+    }
+
+    if (p.type === 'free') {
+      stage.innerHTML = `
+        <div class="pa-prompt">${promptHtml}</div>
+        <input type="text" id="paFreeInput" placeholder="Nhập câu trả lời..." style="width:100%; text-align:center; border:2px solid var(--gold-3); border-radius:12px; padding:16px 12px; margin: 16px 0; font-family:'StoryScript', 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', Georgia, serif; font-size:clamp(1.2rem, 5vw, 1.8rem); letter-spacing:0.05em; outline:none; background:var(--panel, rgba(255,255,255,0.7)); color:var(--text, #333); box-sizing:border-box; box-shadow: inset 0 2px 6px rgba(0,0,0,0.05); transition: border-color 0.3s, box-shadow 0.3s;" onfocus="this.style.borderColor='var(--gold-1)'; this.style.boxShadow='0 0 0 3px rgba(212,175,55,0.2), inset 0 2px 6px rgba(0,0,0,0.05)';" onblur="this.style.borderColor='var(--gold-3)'; this.style.boxShadow='inset 0 2px 6px rgba(0,0,0,0.05)';">
+        <div class="quiz-btns" style="margin-top:16px;">
+          <button class="btn-clear" id="paResetBtn" style="display:none;">↺ Làm lại</button>
+          <button class="btn-gold" id="paCheckBtn">✓ Kiểm tra</button>
+          <button class="btn-clear" id="newPassageBtn">🎲 Câu khác</button>
+        </div>
+        <div class="pa-feedback" id="paFb"></div>`;
+        
+      const fb = $('paFb');
+      if ($('paResetBtn')) {
+        $('paResetBtn').onclick = () => {
+          $('paFreeInput').value = '';
+          fb.innerHTML = '';
+          fb.className = 'pa-feedback';
+          $('paResetBtn').style.display = 'none';
+        };
+      }
+      $('paCheckBtn').onclick = () => {
+        const val = $('paFreeInput').value.trim();
+        if (!val) { fb.textContent = 'Hãy nhập câu trả lời của bạn trước nhé.'; fb.className = 'pa-feedback no'; return; }
+        
+        // Lưu đáp án lên Firestore (dùng bảng submissions để tận dụng quyền ghi hiện có)
+        if (typeof db !== 'undefined' && db) {
+          let studentName = (typeof profile !== 'undefined' && profile && profile.name) || localStorage.getItem('hanzi-player-name') || 'Học sinh ẩn danh';
+          
+          let h = 0;
+          let str = studentName + '_' + p.q;
+          for(let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+          let docId = 'pa_' + (h >>> 0).toString(16);
+          
+          db.collection('submissions').doc(docId).set({
+            q: p.q,
+            answer: val,
+            studentName: studentName,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          }, {merge: true}).catch(err => console.log('Lỗi lưu đáp án:', err));
+        }
+
+        fb.innerHTML = '✓ Đã ghi nhận câu trả lời! 🎉';
+        fb.className = 'pa-feedback ok';
+        paIsCorrect = true;
+        if (p.s) {
+          fb.innerHTML += '<div class="pa-correct" style="margin-top:12px; font-weight:normal; font-size:1rem; color:#555;"><strong>Gợi ý của giáo viên:</strong><br/>' + escapeHtml(p.s) + '</div>';
+          
+          // Tạo nút Luyện nói câu gợi ý
+          const readBtn = document.createElement('button');
+          readBtn.className = 'pa-read-btn';
+          readBtn.innerHTML = '🎙️ Luyện nói câu này';
+          readBtn.style.marginTop = '10px';
+          readBtn.onclick = () => {
+            if (window.HanziUI && typeof window.HanziUI.openPronounceModal === 'function') {
+              const sentenceClean = p.s.replace(/\s+/g, '');
+              let pinyin = '';
+              if (window.pinyinPro) pinyin = window.pinyinPro.pinyin(sentenceClean);
+              window.HanziUI.openPronounceModal(sentenceClean, pinyin, p.m || '');
+            }
+          };
+          fb.appendChild(readBtn);
+        }
+        $('paFreeInput').value = ''; // Reset the input field
+        if (typeof addPoints === 'function') addPoints(2);
+      };
+    } else {
+      stage.innerHTML = `
+        <div class="pa-prompt">${promptHtml}</div>
+        <div class="pa-hint">Bấm từng từ để thêm vào câu; bấm từ trong câu để bỏ ra.</div>
+        <div class="pa-answer" id="paAnswer"></div>
+        <div class="pa-bank" id="paBank"></div>
+        <div class="quiz-btns" style="margin-top:16px;">
+          <button class="btn-clear" id="paResetBtn" style="display:none;">↺ Làm lại</button>
+          <button class="btn-gold" id="paCheckBtn">✓ Kiểm tra</button>
+          <button class="btn-clear" id="newPassageBtn">🎲 Câu khác</button>
+        </div>
+        <div class="pa-feedback" id="paFb"></div>`;
+
+      const bank = $('paBank'), answer = $('paAnswer'), fb = $('paFb');
+      function mkWord(w, inAnswer) {
+        const b = document.createElement('button');
+        b.className = 'pa-word'; b.textContent = w;
+        b.onclick = () => {
+          fb.textContent = ''; fb.className = 'pa-feedback';
+          if (inAnswer) { b.remove(); addToBank(w); }
+          else { b.remove(); answer.appendChild(mkWord(w, true)); }
+        };
+        return b;
+      }
+      function addToBank(w) { bank.appendChild(mkWord(w, false)); }
+      shuffled.forEach(w => addToBank(w));
+
+      $('paResetBtn').onclick = () => {
+        $('paResetBtn').style.display = 'none';
+        showPassage(idx);
+      };
+      $('paCheckBtn').onclick = () => {
+        const got = Array.from(answer.querySelectorAll('.pa-word')).map(x => x.textContent);
+        if (got.length === 0) { fb.textContent = 'Hãy chọn các từ để ghép câu.'; fb.className = 'pa-feedback no'; return; }
+        if (got.join(' ') === words.join(' ')) {
+          fb.innerHTML = '✓ Chính xác! 🎉';
+          
+          // Nút Luyện nói câu vừa ghép
+          const readBtn = document.createElement('button');
+          readBtn.className = 'pa-read-btn';
+          readBtn.innerHTML = '🎙️ Luyện nói câu này';
+          readBtn.style.marginTop = '10px';
+          readBtn.onclick = () => {
+            if (window.HanziUI && typeof window.HanziUI.openPronounceModal === 'function') {
+              const sentenceClean = words.join('');
+              let pinyin = '';
+              if (window.pinyinPro) pinyin = window.pinyinPro.pinyin(sentenceClean);
+              window.HanziUI.openPronounceModal(sentenceClean, pinyin, p.m || '');
+            }
+          };
+          fb.appendChild(document.createElement('br'));
+          fb.appendChild(readBtn);
+
+          fb.className = 'pa-feedback ok';
+          paIsCorrect = true;
+          $('paResetBtn').style.display = 'none';
+          if (typeof speak === 'function') speak(words.join(''));
+          if (typeof addPoints === 'function') addPoints(2);
+        } else {
+          fb.innerHTML = '✗ Chưa đúng, thử lại nhé.<div class="pa-correct">Đáp án: ' + escapeHtml(words.join(' ')) + '</div>';
+          fb.className = 'pa-feedback no';
+          $('paResetBtn').style.display = 'inline-block';
+        }
+      };
+    }
+    // Bind Câu khác
+    if ($('newPassageBtn')) {
+      $('newPassageBtn').onclick = renderPassageExercise;
+    }
+  }
+
+  // ===== Tập viết chữ Hán & Nét vẽ (HanziWriter) =====
+  let currentWriteChar = '';
+  let hanziWriterInstance = null;
+  let writeTimeoutId = null;
+
+  function openWriteModal(word) {
+    // Lọc lấy các ký tự là chữ Hán thực sự
+    const chars = [...word].filter(c => /\p{Unified_Ideograph}/u.test(c));
+    if (chars.length === 0) return;
+
+    const modal = $('writeModal');
+    if (!modal) return;
+    modal.classList.add('active');
+
+    const targetLabel = $('writeTargetChar');
+    targetLabel.innerHTML = '';
+
+    if (chars.length > 1) {
+      // Có nhiều chữ Hán -> vẽ tab lựa chọn
+      const group = document.createElement('div');
+      group.className = 'write-char-tabs';
+      chars.forEach((c, idx) => {
+        const tabBtn = document.createElement('button');
+        tabBtn.className = 'write-char-tab' + (idx === 0 ? ' active' : '');
+        tabBtn.textContent = c;
+        tabBtn.onclick = () => {
+          group.querySelectorAll('.write-char-tab').forEach(b => b.classList.remove('active'));
+          tabBtn.classList.add('active');
+          initWriter(c);
+        };
+        group.appendChild(tabBtn);
+      });
+      targetLabel.appendChild(group);
+    } else {
+      // Chỉ có 1 chữ Hán -> hiển thị chữ Hán cỡ to làm nhãn
+      const lbl = document.createElement('div');
+      lbl.style.fontSize = '2.2rem';
+      lbl.style.fontWeight = '800';
+      lbl.style.color = 'var(--gold-1)';
+      lbl.style.fontFamily = '"Noto Serif SC", serif';
+      lbl.textContent = chars[0];
+      targetLabel.appendChild(lbl);
+    }
+
+    // Khởi tạo bảng vẽ với chữ Hán đầu tiên
+    initWriter(chars[0]);
+  }
+
+  function cleanupWriter() {
+    if (writeTimeoutId) {
+      clearTimeout(writeTimeoutId);
+      writeTimeoutId = null;
+    }
+    if (hanziWriterInstance) {
+      try {
+        if (typeof hanziWriterInstance.cancelQuiz === 'function') {
+          hanziWriterInstance.cancelQuiz();
+        }
+      } catch (e) {}
+      hanziWriterInstance = null;
+    }
+  }
+
+  function initWriter(char) {
+    currentWriteChar = char;
+
+    cleanupWriter();
+
+    const container = $('writerContainer');
+    const statusEl = $('writeStatus');
+    if (!container || !statusEl) return;
+
+    // Tái tạo lại thẻ target div để cô lập hoàn toàn HanziWriter cũ khỏi DOM
+    container.innerHTML = '';
+    const targetDiv = document.createElement('div');
+    targetDiv.id = 'character-target-div';
+    container.appendChild(targetDiv);
+
+    statusEl.textContent = 'Đang tải nét vẽ...';
+    statusEl.className = 'io-note';
+
+    if (typeof HanziWriter === 'undefined') {
+      statusEl.textContent = '⚠️ Lỗi: Không thể tải thư viện tập viết (Kiểm tra kết nối mạng).';
+      statusEl.className = 'io-note error';
+      return;
+    }
+
+    try {
+      const isLight = document.body.classList.contains('light');
+      hanziWriterInstance = HanziWriter.create(targetDiv, char, {
+        width: 180,
+        height: 180,
+        padding: 10,
+        showOutline: true,
+        strokeColor: isLight ? '#7d1626' : '#f3d98b',
+        outlineColor: isLight ? '#e6e6e6' : '#232834',
+        drawingColor: isLight ? '#1f9d63' : '#3ed18a',
+        strokeAnimationSpeed: 1.25,
+        delayBetweenStrokes: 300
+      });
+
+      // Tự động vẽ mẫu 1 lần lúc bắt đầu
+      writeTimeoutId = setTimeout(() => {
+        if (!hanziWriterInstance) return;
+        statusEl.textContent = 'Đang vẽ hướng dẫn...';
+        hanziWriterInstance.animateCharacter({
+          onComplete: () => {
+            if (statusEl && statusEl.textContent === 'Đang vẽ hướng dẫn...') {
+              startWritingQuiz();
+            }
+          }
+        });
+      }, 350);
+    } catch (e) {
+      statusEl.textContent = '⚠️ Lỗi khởi tạo bảng tập viết.';
+      statusEl.className = 'io-note error';
+      console.error(e);
+    }
+  }
+
+  function startWritingQuiz() {
+    if (!hanziWriterInstance) return;
+    try {
+      if (typeof hanziWriterInstance.cancelQuiz === 'function') {
+        hanziWriterInstance.cancelQuiz();
+      }
+    } catch (e) {}
+    
+    const statusEl = $('writeStatus');
+    statusEl.textContent = 'Hãy viết nét tiếp theo...';
+    statusEl.className = 'io-note';
+    statusEl.style.color = '';
+
+    hanziWriterInstance.quiz({
+      onCorrectStroke: function(strokeData) {
+        statusEl.textContent = '✓ Chính xác!';
+        statusEl.className = 'io-note ok';
+        statusEl.style.color = 'var(--green-1)';
+      },
+      onMistake: function(strokeData) {
+        statusEl.textContent = '✗ Sai nét rồi, vẽ lại nhé!';
+        statusEl.className = 'io-note error';
+        statusEl.style.color = '#ff9d8e';
+      },
+      onComplete: function(summary) {
+        if (summary.totalMistakes === 0) {
+          statusEl.textContent = '🎉 Tuyệt vời! Viết hoàn hảo!';
+          statusEl.className = 'io-note ok';
+          statusEl.style.color = 'var(--green-1)';
+        } else {
+          statusEl.textContent = `🎉 Hoàn thành! (Sai: ${summary.totalMistakes} lần)`;
+          statusEl.className = 'io-note warning';
+          statusEl.style.color = 'var(--gold-1)';
+        }
+      }
+    });
+  }
+
+  // Gắn sự kiện điều khiển Modal tập viết
+  if ($('btnWriteAnimate')) {
+    $('btnWriteAnimate').onclick = () => {
+      if (!hanziWriterInstance) return;
+      const statusEl = $('writeStatus');
+      statusEl.textContent = 'Đang vẽ hướng dẫn...';
+      statusEl.className = 'io-note';
+      statusEl.style.color = '';
+      try {
+        if (typeof hanziWriterInstance.cancelQuiz === 'function') {
+          hanziWriterInstance.cancelQuiz();
+        }
+      } catch (e) {}
+      hanziWriterInstance.animateCharacter({
+        onComplete: () => {
+          if (statusEl && statusEl.textContent === 'Đang vẽ hướng dẫn...') {
+            startWritingQuiz();
+          }
+        }
+      });
+    };
+  }
+
+  if ($('btnWriteQuiz')) {
+    $('btnWriteQuiz').onclick = () => {
+      startWritingQuiz();
+    };
+  }
+
+  if ($('btnWriteClear')) {
+    $('btnWriteClear').onclick = () => {
+      if (currentWriteChar) initWriter(currentWriteChar);
+    };
+  }
+
+  if ($('btnWriteClose')) {
+    $('btnWriteClose').onclick = () => {
+      cleanupWriter();
+      const modal = $('writeModal');
+      if (modal) modal.classList.remove('active');
+    };
+  }
+
+  // Khởi tạo
+  load();
+  // Trên điện thoại (màn hình hẹp): chỉ cho chọn 1/2/3 cột, mặc định 3
+  if (window.matchMedia('(max-width: 600px)').matches) {
+    colSelect.innerHTML = '<option value="1">1</option><option value="2">2</option><option value="3" selected>3</option>';
+    columns = 3;
+    colSelect.value = '3';
+  }
+  renderList();
+  renderGrid();   // hiện sẵn lưới Học (trang mặc định)
+  renderQuiz();
+  gameStartScreen();
+  // Chờ đăng nhập ẩn danh xong rồi mới đồng bộ/ghi (để Security Rules cho phép);
+  // nếu không có Auth (offline) thì chạy luôn như cũ.
+  function startSync() {
+    subscribeShared();   // nhận từ vựng CHUNG của cả lớp
+    ensureProfile();     // đăng ký/đếm phiên thành viên
+  }
+  if (db && firebase.auth) {
+    let started = false;
+    const go = () => { if (!started) { started = true; startSync(); } };
+    firebase.auth().onAuthStateChanged(u => { if (u) go(); });
+    setTimeout(go, 2500);   // dự phòng nếu auth chậm/lỗi
+  } else {
+    startSync();
+  }
+  // Áp dụng chế độ Học sinh / Giáo viên đã lưu
+  applyRole(localStorage.getItem('hanzi-role') || 'student');
+})();

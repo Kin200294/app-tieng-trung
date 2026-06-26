@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      console.log('Global Error:', msg, lineNo, columnNo);
+      fetch('http://localhost:3001/error?msg=' + encodeURIComponent(msg));
+      return false;
+    };
+  </script>
+</head>
+<body>
+  <!-- Mocks for DOM elements so we don't crash on missing elements -->
+  <div id="themeToggle"></div>
+  <div id="toolsToggle"></div>
+  <div id="inHanzi"></div>
+  <div id="inPinyin"></div>
+  <div id="inMeaning"></div>
+  <div id="inExample"></div>
+  <div id="inLessonSelect"></div>
+  <div id="addBtn"></div>
+  <div id="clearBtn"></div>
+  <div id="list"></div>
+  <div id="grid"></div>
+  <div id="colSelect"></div>
+  <div id="frontSelect"></div>
+  <div id="lessonFilter"></div>
+  <div id="shuffleBtn"></div>
+  <div id="flipAllBtn"></div>
+  <div id="count"></div>
+  <div id="flagFilterBtn"></div>
+  <div id="searchInput"></div>
+  <div id="manageLessonFilter"></div>
+  <div id="importCsvBtnWrapper"></div>
+  <div id="importCsvFile"></div>
+  <div id="downloadTemplateBtn"></div>
+  <div id="exportBtn"></div>
+  <div id="importBtn"></div>
+  <div id="importFile"></div>
+  
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

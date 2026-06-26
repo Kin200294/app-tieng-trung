@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Quản trị — Học Chữ Hán</title>
+<link rel="stylesheet" href="styles.css?v=22">
+<style>
+  body {
+    background: radial-gradient(circle at top, #1e131d 0%, #0d0f14 100%);
+    color: var(--text);
+    font-family: "Segoe UI", sans-serif;
+  }
+  .container { max-width: 1000px; padding: 20px; margin: auto; animation: fadeInUp .6s ease both; }
+  h1.admin-title {
+    text-align:center; font-family:"Segoe UI",sans-serif; font-weight:800;
+    color:transparent; background:linear-gradient(100deg,var(--gold-1),var(--gold-3));
+    -webkit-background-clip:text; background-clip:text;
+    font-size:clamp(2rem,6vw,2.8rem); margin-bottom:32px; letter-spacing: 2px;
+    text-transform: uppercase; text-shadow: 0 4px 12px rgba(212,175,55,0.2);
+  }
+  
+  /* LOGIN PANEL */
+  #loginPanel {
+    max-width: 400px; margin: 60px auto; background: var(--panel-solid); padding: 32px;
+    border-radius: 16px; border: 1px solid var(--crimson-2);
+    box-shadow: 0 0 40px rgba(192,57,43,0.15), inset 0 0 20px rgba(0,0,0,0.5);
+    text-align: center;
+  }
+  #loginPanel label { display: block; color: var(--gold-1); font-weight: bold; margin-bottom: 12px; letter-spacing: 1px; }
+  #loginPanel input { text-align: center; font-size: 1.2rem; letter-spacing: 4px; border: 1px solid var(--crimson-2); background: rgba(0,0,0,0.3); color: #fff; border-radius: 8px; padding: 12px; width: 100%; margin-bottom: 20px; transition: 0.3s; }
+  #loginPanel input:focus { border-color: var(--crimson-1); box-shadow: 0 0 12px rgba(192,57,43,0.4); outline: none; }
+  #loginPanel button { width: 100%; padding: 14px; font-size: 1.1rem; background: linear-gradient(135deg, var(--crimson-1), var(--crimson-2)); border: none; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; }
+  #loginPanel button:hover { box-shadow: 0 0 20px rgba(192,57,43,0.5); filter: brightness(1.2); }
+
+  /* DASHBOARD GRID */
+  #dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  
+  /* CARDS */
+  .admin-card {
+    background: var(--panel); border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 16px; padding: 24px; position: relative; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .admin-card:hover { border-color: var(--gold-3); box-shadow: 0 8px 32px rgba(212,175,55,0.1); transform: translateY(-2px); }
+  .admin-card::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+    background: linear-gradient(90deg, transparent, var(--gold-2), transparent);
+    opacity: 0.5;
+  }
+  .admin-card.danger-card::before { background: linear-gradient(90deg, transparent, var(--crimson-1), transparent); }
+  
+  .admin-card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; color: var(--gold-1); font-size: 1.3rem; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 12px; }
+  
+  .big-num { display: block; font-size: 2.5rem; font-weight: 900; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.2); margin-bottom: 4px; }
+  .stat-desc { color: var(--muted); font-size: 0.9rem; margin-bottom: 20px; }
+  
+  .admin-row { display:flex; gap:12px; align-items:center; }
+  .admin-row input { flex:1; padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: #fff; font-size: 1rem; transition: 0.3s; }
+  .admin-row input:focus { border-color: var(--gold-2); outline: none; background: rgba(0,0,0,0.4); }
+  
+  /* BUTTONS */
+  .btn-action { padding: 12px 20px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: 0.3s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-gold { background: linear-gradient(135deg, var(--gold-2), var(--gold-3)); color: #000; }
+  .btn-gold:hover { filter: brightness(1.2); box-shadow: 0 0 15px rgba(212,175,55,0.4); }
+  .btn-danger { background: linear-gradient(135deg, #e0573a, var(--crimson-2)); color: #fff; }
+  .btn-danger:hover { filter: brightness(1.2); box-shadow: 0 0 15px rgba(192,57,43,0.5); }
+  .btn-outline { background: transparent; border: 1px solid var(--gold-3); color: var(--gold-1); }
+  .btn-outline:hover { background: rgba(212,175,55,0.1); border-color: var(--gold-2); }
+  
+  /* MEMBERS LIST */
+  .members-card { grid-column: 1 / -1; }
+  .members-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  #adminMembers { display: flex; flex-direction: column; gap: 12px; max-height: 600px; overflow-y: auto; padding-right: 8px; }
+  #adminMembers::-webkit-scrollbar { width: 6px; }
+  #adminMembers::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+  
+  .member-row {
+    background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px;
+    padding: 16px; display: flex; align-items: center; gap: 16px; transition: 0.2s;
+  }
+  .member-row:hover { background: rgba(0,0,0,0.4); border-color: rgba(212,175,55,0.3); }
+  .member-rank { min-width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--gold-1), var(--gold-3)); color: #000; font-weight: 900; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px 10px rgba(212,175,55,0.3); }
+  .member-info { flex: 1; }
+  .member-name { font-size: 1.2rem; font-weight: bold; color: #fff; margin-bottom: 4px; }
+  .member-sub { font-size: 0.85rem; color: var(--muted); }
+  .member-stats { text-align: right; margin-right: 20px; }
+  .member-score { display: block; font-weight: 800; color: var(--gold-1); font-size: 1.1rem; }
+  .member-prog { font-size: 0.85rem; color: var(--muted); }
+  
+  .mem-actions { display: flex; gap: 8px; }
+  .mem-actions button { padding: 8px 12px; font-size: 0.85rem; border-radius: 6px; font-weight: bold; }
+  
+  @media (max-width: 768px) {
+    #dashboard { grid-template-columns: 1fr; }
+    .member-row { flex-wrap: wrap; gap: 12px; }
+    .member-info { min-width: 100%; }
+    .member-stats { text-align: left; margin-right: auto; display: flex; gap: 16px; align-items: center; }
+    .mem-actions { width: 100%; justify-content: flex-end; }
+    .members-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+  
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body class="role-student">
+<div class="container">
+  <h1 class="admin-title">⚡ TRUNG TÂM ĐIỀU KHIỂN</h1>
+
+  <!-- Đăng nhập admin -->
+  <div id="loginPanel">
+    <div class="field">
+      <label for="adminPass">MÃ TRUY CẬP HỆ THỐNG</label>
+      <input type="password" id="adminPass" placeholder="••••••••" autocomplete="off">
+    </div>
+    <button id="adminLoginBtn">🔓 XÁC NHẬN</button>
+    <p class="io-note" id="loginMsg" style="color:#ff9d8e; margin-top: 16px;"></p>
+  </div>
+
+  <!-- Bảng điều khiển -->
+  <div id="dashboard" style="display:none;">
+
+    <div class="admin-card">
+      <h3>🔑 Mật khẩu truy cập lớp</h3>
+      <span class="big-num" id="curTeacherPass">…</span>
+      <div class="stat-desc">Mật khẩu hiện tại để học sinh / giáo viên thao tác.</div>
+      <div class="admin-row">
+        <input type="text" id="newTeacherPass" placeholder="Nhập mật khẩu mới...">
+        <button class="btn-action btn-gold" id="saveTeacherPass">Cập nhật</button>
+      </div>
+    </div>
+
+    <div class="admin-card danger-card">
+      <h3>📚 Cơ sở dữ liệu từ vựng</h3>
+      <span class="big-num" id="vocabCount">…</span>
+      <div class="stat-desc">Tổng số từ vựng trong kho chung của cả lớp.</div>
+      <button class="btn-action btn-danger" id="clearVocab">🗑️ Xoá toàn bộ dữ liệu</button>
+    </div>
+
+    <div class="admin-card members-card">
+      <div class="members-header">
+        <h3 style="margin:0; border:none; padding:0;">👥 Hồ sơ Học viên (<span id="memCount">0</span>)</h3>
+        <div style="display:flex; gap:12px;">
+          <button class="btn-action btn-outline" id="reloadMembers">🔄 Làm mới</button>
+          <button class="btn-action btn-danger" id="clearMembers">🗑️ Xóa tất cả</button>
+        </div>
+      </div>
+      <div id="adminMembers"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+(function () {
+  const ADMIN_PASS = 'kinkin06092002';
+  const FB_CONFIG = {
+    apiKey: "AIzaSyDB15EkqWvyFpUTdy_1D80DnKg1cT-946Q",
+    authDomain: "hoc-chu-han.firebaseapp.com",
+    projectId: "hoc-chu-han",
+    storageBucket: "hoc-chu-han.firebasestorage.app",
+    messagingSenderId: "730479874371",
+    appId: "1:730479874371:web:0219d04f0f1279ba0c9ff6"
+  };
+  let db = null;
+  try {
+    firebase.initializeApp(FB_CONFIG); db = firebase.firestore();
+    if (firebase.auth) firebase.auth().signInAnonymously().catch(() => {});
+  } catch (e) {}
+
+  const $ = id => document.getElementById(id);
+  const esc = s => (s || '').toString().replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const onlineLevel = s => s >= 20 ? 'Rất tích cực 🔥' : s >= 8 ? 'Khá thường xuyên' : s >= 3 ? 'Thỉnh thoảng' : 'Mới tham gia';
+  const fmtDate = ms => { if (!ms) return ''; const d = new Date(ms); const p = n => String(n).padStart(2,'0'); return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes()); };
+
+  // ===== Đăng nhập =====
+  function login() {
+    if ($('adminPass').value !== ADMIN_PASS) { $('loginMsg').textContent = 'Mã truy cập không hợp lệ.'; return; }
+    $('loginPanel').style.display = 'none';
+    $('dashboard').style.display = 'grid';
+    if (!db) { alert('Không kết nối được cơ sở dữ liệu (cần có mạng).'); return; }
+    loadTeacherPass(); loadVocab(); loadMembers();
+  }
+  $('adminLoginBtn').onclick = login;
+  $('adminPass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+  // ===== Mật khẩu giáo viên =====
+  function loadTeacherPass() {
+    db.collection('shared').doc('config').get().then(s => {
+      $('curTeacherPass').textContent = (s.exists && s.data().teacherPass) ? s.data().teacherPass : 'kinkin2002 (mặc định)';
+    }).catch(() => { $('curTeacherPass').textContent = '(lỗi)'; });
+  }
+  $('saveTeacherPass').onclick = () => {
+    const v = $('newTeacherPass').value.trim();
+    if (!v) { alert('Nhập mật khẩu mới.'); return; }
+    db.collection('shared').doc('config').set({ teacherPass: v }, { merge: true })
+      .then(() => { $('newTeacherPass').value = ''; loadTeacherPass(); alert('Đã cập nhật mật khẩu lớp học thành: ' + v); })
+      .catch(e => alert('Lỗi: ' + e.message));
+  };
+
+  // ===== Từ vựng chung =====
+  function loadVocab() {
+    db.collection('shared').doc('words').get().then(s => {
+      const n = (s.exists && Array.isArray(s.data().vocab)) ? s.data().vocab.length : 0;
+      $('vocabCount').textContent = n;
+    }).catch(() => { $('vocabCount').textContent = '?'; });
+  }
+  $('clearVocab').onclick = () => {
+    if (!confirm('CẢNH BÁO: Xoá TOÀN BỘ từ vựng chung của cả lớp? Không thể hoàn tác.')) return;
+    db.collection('shared').doc('words').set({ vocab: [], lessons: [], updatedAt: Date.now() })
+      .then(() => { loadVocab(); alert('Đã xoá toàn bộ dữ liệu từ vựng.'); })
+      .catch(e => alert('Lỗi: ' + e.message));
+  };
+
+  // ===== Thành viên =====
+  function loadMembers() {
+    const el = $('adminMembers');
+    el.innerHTML = '<p class="io-note">Đang truy xuất dữ liệu…</p>';
+    db.collection('members').orderBy('score', 'desc').limit(500).get().then(snap => {
+      const rows = []; snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+      $('memCount').textContent = rows.length;
+      if (!rows.length) { el.innerHTML = '<p class="empty-msg" style="color:var(--muted); text-align:center;">Chưa có hồ sơ học viên nào.</p>'; return; }
+      el.innerHTML = '';
+      rows.forEach((m, i) => {
+        const pct = m.total ? Math.round((m.known || 0) / m.total * 100) : 0;
+        const row = document.createElement('div');
+        row.className = 'member-row';
+        row.innerHTML = `
+          <div class="member-rank">${i + 1}</div>
+          <div class="member-info">
+            <div class="member-name">${esc(m.name || '?')}</div>
+            <div class="member-sub">${m.dob ? '🎂 ' + esc(m.dob) + ' · ' : ''}Trạng thái: ${onlineLevel(m.sessions || 0)} (${m.sessions || 0} session) · Lần cuối: ${fmtDate(m.lastSeen)}</div>
+          </div>
+          <div class="member-stats">
+            <span class="member-score">⭐ ${m.score || 0}</span>
+            <span class="member-prog">Tỉ lệ thuộc: ${m.known || 0}/${m.total || 0} (${pct}%)</span>
+          </div>`;
+        const acts = document.createElement('div');
+        acts.className = 'mem-actions';
+        const bEdit = document.createElement('button');
+        bEdit.className = 'btn-action btn-gold'; bEdit.innerHTML = '✏️ Sửa';
+        bEdit.onclick = () => {
+          const newName = prompt('Sửa Họ và Tên:', m.name || '');
+          if (newName === null) return;
+          const cleanName = newName.trim();
+          if (!cleanName) { alert('Họ tên không được để trống.'); return; }
+          const newScoreStr = prompt('Sửa Điểm số:', m.score || 0);
+          if (newScoreStr === null) return;
+          const newScore = parseInt(newScoreStr, 10);
+          if (isNaN(newScore)) { alert('Điểm số phải là một số hợp lệ.'); return; }
+          if (confirm('Lưu thông tin thành viên "' + (m.name || '?') + '" thành:\n- Tên: "' + cleanName + '"\n- Điểm: ' + newScore + '?')) {
+            db.collection('members').doc(m.id).set({ name: cleanName, score: newScore }, { merge: true })
+              .then(() => { alert('Cập nhật thành công! 🎉'); loadMembers(); })
+              .catch(e => alert('Lỗi: ' + e.message));
+          }
+        };
+        const bReset = document.createElement('button');
+        bReset.className = 'btn-action btn-outline'; bReset.innerHTML = '🔄 Reset';
+        bReset.onclick = () => {
+          if (!confirm('Đặt lại điểm số của "' + (m.name || '?') + '" về 0?')) return;
+          db.collection('members').doc(m.id).set({ score: 0 }, { merge: true }).then(loadMembers);
+        };
+        const bDel = document.createElement('button');
+        bDel.className = 'btn-action btn-danger'; bDel.innerHTML = '🗑️ Xoá';
+        bDel.onclick = () => {
+          if (!confirm('CẢNH BÁO: Xoá hồ sơ học viên "' + (m.name || '?') + '"?')) return;
+          db.collection('members').doc(m.id).delete().then(loadMembers);
+        };
+        acts.append(bEdit, bReset, bDel);
+        row.appendChild(acts);
+        el.appendChild(row);
+      });
+    }).catch(e => { el.innerHTML = '<p class="io-note">Lỗi: ' + esc(e.message) + '</p>'; });
+  }
+  $('reloadMembers').onclick = loadMembers;
+  $('clearMembers').onclick = () => {
+    if (!confirm('Xoá TẤT CẢ thành viên? Không thể hoàn tác.')) return;
+    db.collection('members').limit(500).get().then(snap => {
+      const batch = db.batch();
+      snap.forEach(d => batch.delete(d.ref));
+      batch.commit().then(loadMembers);
+    });
+  };
+})();
+</script>
+</body>
+</html>

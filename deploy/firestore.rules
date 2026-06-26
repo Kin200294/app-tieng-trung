@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// ===== Security Rules cho app "Học Chữ Hán" =====
+// - KHÔNG hết hạn (vĩnh viễn), không còn chế độ test.
+// - Ai cũng ĐỌC được (app cần đọc từ vựng, bảng xếp hạng, thành viên).
+// - Chỉ GHI được khi đã đăng nhập (app tự đăng nhập ẩn danh) -> chặn bot/người ngoài lỡ tay.
+// - Chặn các thao tác phá hoại: không xoá kho từ vựng chung, leaderboard chỉ thêm không sửa/xoá.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Mặc định: đọc thoải mái, cấm ghi (các quy tắc dưới sẽ mở từng phần)
+    match /{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Từ vựng chung của cả lớp + cấu hình (mật khẩu giáo viên)
+    // - shared/words: vocab/lessons/passages ; shared/config: teacherPass
+    match /shared/{docId} {
+      allow read: if true;
+      // Cho tạo/sửa khi đã đăng nhập; với 'words' bắt buộc 'vocab' phải là mảng (tránh ghi rác)
+      allow create, update: if request.auth != null
+        && (docId != 'words' || request.resource.data.vocab is list);
+      // KHÔNG cho xoá tài liệu chung (tránh mất sạch dữ liệu lớp)
+      allow delete: if false;
+    }
+
+    // Hồ sơ thành viên (điểm, tiến độ, lịch sử kiểm tra/ghép thẻ)
+    match /members/{memberId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    // Bảng xếp hạng online: chỉ được THÊM kết quả mới, không sửa/xoá kết quả cũ
+    match /leaderboard/{entryId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    // Đề kiểm tra giáo viên giao
+    match /assignments/{id} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    // Bài học sinh nộp
+    match /submissions/{id} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+  }
+}

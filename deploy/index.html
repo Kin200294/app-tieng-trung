@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Học Chữ Hán</title>
+<!-- Chạy toàn màn hình khi mở từ màn hình chính (web-app) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Học Chữ Hán">
+<meta name="theme-color" content="#0d0f14">
+<link rel="icon" type="image/jpeg" href="logo1.jpg">
+<link rel="apple-touch-icon" href="logo1.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Dancing+Script:wght@700&display=swap&subset=vietnamese,latin" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=46">
+  <link rel="stylesheet" href="aichat.css?v=2">
+  <link rel="stylesheet" href="dashboard.css?v=1">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+<button class="theme-toggle tools-toggle" id="toolsToggle" title="Tùy chọn">⚙️</button>
+<button class="theme-toggle snd" id="soundToggle" title="Bật/tắt tiếng">🔊</button>
+<button class="theme-toggle" id="themeToggle" title="Đổi tông sáng/tối">🌙</button>
+<button class="theme-toggle profile-btn" id="profileBtn" title="Tài khoản">👤</button>
+<div class="container">
+  <h1>Học Chữ Hán Cùng</h1>
+  <div class="name-zh"><span>富</span><span>嘉</span><span>荣</span></div>
+  <p class="app-sub">Hán tự &nbsp;·&nbsp; Pinyin &nbsp;·&nbsp; Nghĩa</p>
+
+  <div class="role-switch">
+    <button class="role-btn active" data-role="student">🎓 Học sinh</button>
+    <button class="role-btn" data-role="teacher">👨‍🏫 Giáo viên</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-page="learn" data-role="student">🎴 Học</button>
+    <button class="tab" data-page="quiz" data-role="student">📝 Kiểm tra</button>
+    <button class="tab" data-page="game" data-role="student">🎮 Ghép thẻ</button>
+    <button class="tab" data-page="passage" data-role="student">📖 Bài khóa</button>
+    <button class="tab" data-page="aiChat" data-role="student">💬 Trò chuyện AI</button>
+    <button class="tab" data-page="exam" data-role="student">🧪 Làm bài KT</button>
+    <button class="tab" data-page="leaderboard" data-role="student">🏆 Bảng vàng</button>
+    <button class="tab" data-page="add" data-role="teacher">✏️ Thêm chữ</button>
+    <button class="tab" data-page="lessons" data-role="teacher">📁 Quản lý bài</button>
+    <button class="tab" data-page="passageEdit" data-role="teacher">📖 Soạn bài khóa</button>
+    <button class="tab" data-page="classDiff" data-role="teacher">📊 Chữ khó</button>
+    <button class="tab" data-page="examEdit" data-role="teacher">📋 Giao bài KT</button>
+    <button class="tab" data-page="members" data-role="teacher">👥 Thành viên</button>
+  </div>
+
+  <!-- ============ TRANG BẢNG VÀNG ============ -->
+  <div class="page" id="page-leaderboard">
+    <div class="lb-header">
+      <h2>🏆 Bảng Vàng Danh Dự 🏆</h2>
+      <p>Top học sinh xuất sắc nhất lớp</p>
+    </div>
+    <div id="leaderboardStage" class="lb-stage"></div>
+  </div>
+
+  <!-- ============ TRANG THÊM CHỮ ============ -->
+  <div class="page" id="page-add">
+    <div class="panel">
+      <div class="field">
+        <label for="inHanzi">Chữ Hán</label>
+        <input type="text" id="inHanzi" placeholder="你好" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="inPinyin">Pinyin</label>
+        <input type="text" id="inPinyin" placeholder="nǐ hǎo" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="inMeaning">Nghĩa</label>
+        <input type="text" id="inMeaning" placeholder="xin chào" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="inExample">Câu ví dụ (không bắt buộc)</label>
+        <input type="text" id="inExample" placeholder="你好吗？— Bạn khỏe không?" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="inLessonSelect">Buổi học</label>
+        <select id="inLessonSelect">
+          <option value="">— Chưa gán bài —</option>
+          <option value="__new__">+ Tạo bài mới…</option>
+        </select>
+      </div>
+      <button class="btn-add" id="addBtn">+ Thêm vào danh sách</button>
+    </div>
+
+    <!-- Nhập từ file Excel -->
+    <details class="panel">
+      <summary>Nhập từ file Excel</summary>
+      <div class="options-row bulk-actions" style="margin-bottom:10px;">
+        <button class="btn-outline-gold" id="downloadTemplateBtn">⬇ Tải mẫu Excel</button>
+        <button class="btn-gold" id="importCsvBtnWrapper">📁 Tải file lên</button>
+        <input type="file" id="importCsvFile" accept=".csv" hidden>
+      </div>
+      <p class="io-note"><strong>Cách dùng:</strong> Tải file mẫu về, điền từ vựng (cột: Chữ · Pinyin · Nghĩa · Buổi học · Câu ví dụ) rồi lưu ở định dạng <strong>CSV UTF-8</strong>. Sau đó bấm "Tải file lên".</p>
+    </details>
+
+    <!-- Sao lưu / khôi phục -->
+    <details class="panel">
+      <summary>Sao lưu &amp; khôi phục dữ liệu</summary>
+      <div class="options-row">
+        <button class="btn-io" id="exportBtn">⬇ Xuất ra file</button>
+        <button class="btn-io" id="importBtn">⬆ Nhập từ file</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <p class="io-note">Dữ liệu hiện chỉ lưu trong trình duyệt này. Hãy <strong>Xuất ra file</strong> để sao lưu, đề phòng mất khi xoá cache/đổi máy. Khi nhập file, bạn có thể chọn <em>thay thế</em> hoặc <em>gộp thêm</em>.</p>
+    </details>
+
+
+    <div class="panel">
+      <div class="options-row" style="margin-bottom:14px;">
+        <strong>Danh sách chữ</strong>
+        <button class="btn-clear" id="clearBtn" style="margin-left:auto;">🗑 Xoá tất cả</button>
+      </div>
+      <div class="search-wrap" style="display:flex; gap:8px;">
+        <select id="manageLessonFilter" style="flex: 0 0 auto; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: rgba(0,0,0,0.2); color: var(--gold-1); font-weight: 600; outline: none;">
+          <option value="all">Tất cả bài học</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Tìm theo chữ, pinyin hoặc nghĩa…" autocomplete="off" style="flex: 1;">
+      </div>
+      <div class="list-head">
+        <div>Chữ</div>
+        <div>Pinyin</div>
+        <div>Nghĩa</div>
+        <div>Buổi học</div>
+        <div style="text-align:right;">Thao tác</div>
+      </div>
+      <div id="list"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRANG QUẢN LÝ BÀI ============ -->
+  <div class="page" id="page-lessons">
+    <div class="panel">
+      <div class="lessons-head">
+        <h3>📚 Danh sách bài học</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn-clear" id="changePassBtn">🔑 Đổi mật khẩu</button>
+          <button class="btn-gold" id="addLessonBtn">+ Thêm bài</button>
+        </div>
+      </div>
+      <div id="lessonsList"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRANG BÀI KHÓA (Học sinh làm) ============ -->
+  <div class="page" id="page-passage">
+    <div class="panel">
+      <div class="quiz-controls">
+        <div class="qc-group">
+          <label for="paModeFilter">Loại</label>
+          <select id="paModeFilter">
+            <option value="all" selected>Tất cả</option>
+            <option value="build">Ghép câu hoàn chỉnh</option>
+            <option value="qa">Trả lời câu hỏi</option>
+            <option value="free">Vấn đáp (Trả lời tự do)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="panel" id="passageStage"></div>
+  </div>
+
+  <!-- ============ TRANG SOẠN BÀI KHÓA (Giáo viên) ============ -->
+  <div class="page" id="page-passageEdit">
+    <div class="panel">
+      <div class="field">
+        <label for="paType">Kiểu bài khóa</label>
+        <select id="paType">
+          <option value="build" selected>Ghép câu (cho sẵn câu, ghép lại)</option>
+          <option value="qa">Trả lời câu hỏi</option>
+          <option value="free">Vấn đáp (Trả lời tự do)</option>
+        </select>
+      </div>
+      <div class="field" id="paQField" style="display:none;">
+        <label for="paQ">Câu hỏi (chữ Hán)</label>
+        <input type="text" id="paQ" placeholder="你是中国人吗?" autocomplete="off">
+      </div>
+      <div class="field">
+        <label id="paSLabel" for="paS">Câu chữ Hán — các TỪ cách nhau bằng dấu cách</label>
+        <input type="text" id="paS" placeholder="你 叫 什么 名字" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="paM">Nghĩa / gợi ý (tiếng Việt) — không bắt buộc</label>
+        <input type="text" id="paM" placeholder="Bạn tên là gì?" autocomplete="off">
+      </div>
+      <button class="btn-add" id="paAddBtn">+ Thêm bài khóa</button>
+      <p class="io-note">Mỗi từ ngăn cách bằng <strong>dấu cách</strong>. Kiểu "Trả lời câu hỏi": nhập câu hỏi + các từ của câu trả lời (vd hỏi <code>你是中国人吗?</code>, trả lời <code>我 不是 中国人</code>).</p>
+    </div>
+    <div class="panel">
+      <div class="lessons-head"><h3>Danh sách bài khóa (<span id="paCount">0</span>)</h3></div>
+      <div id="paList"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRANG LÀM BÀI KIỂM TRA (Học sinh) ============ -->
+  <div class="page" id="page-exam"></div>
+
+  <!-- ============ TRANG TRÒ CHUYỆN AI (Học sinh) ============ -->
+  <div class="page" id="page-aiChat">
+    <!-- Cài đặt API Key -->
+    <div class="aichat-config-panel">
+      <div class="aichat-config-header" id="aichatConfigHeader">
+        <h4>🔑 Cài đặt API Key Gemini (Miễn phí)</h4>
+        <button class="aichat-config-toggle" id="btnToggleConfig">▼</button>
+      </div>
+      <div class="aichat-config-body" id="aichatConfigBody" style="display: none;">
+        <p>Để trò chuyện cùng AI, bạn cần một mã API Key Gemini miễn phí. Bạn có thể lấy mã trong 30 giây bằng cách bấm vào <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>, tạo khóa API mới, sau đó dán vào ô dưới đây:</p>
+        <div class="aichat-input-row">
+          <input type="password" id="geminiApiKeyInput" class="aichat-key-input" placeholder="Dán API Key của bạn tại đây..." autocomplete="off">
+          <button class="btn-gold" id="btnSaveApiKey" style="padding: 10px 16px; border-radius: 8px;">Lưu</button>
+        </div>
+        <div class="aichat-input-row" style="margin-top: 8px; align-items: center;">
+          <label for="geminiModelSelect" style="color: var(--gold-1); font-size: 0.85rem; white-space: nowrap; font-weight: 600;">🤖 Model AI:</label>
+          <select id="geminiModelSelect" style="flex:1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-card, #1a1a2e); color: var(--fg, #e0e0e0); font-size: 0.9rem; cursor: pointer; -webkit-appearance: auto;">
+            <option value="gemini-2.5-flash" style="background:#1a1a2e; color:#e0e0e0;">⚡ Gemini 2.5 Flash (15 lượt/phút)</option>
+            <option value="gemini-2.5-flash-lite" style="background:#1a1a2e; color:#e0e0e0;">🪶 Gemini 2.5 Flash Lite (30 lượt/phút)</option>
+            <option value="gemini-2.0-flash-lite" style="background:#1a1a2e; color:#e0e0e0;">💡 Gemini 2.0 Flash Lite (30 lượt/phút)</option>
+          </select>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--muted); margin-top: 6px;">💡 Nếu model đang dùng hết quota, hệ thống sẽ <b style="color: var(--gold-1);">tự động chuyển</b> sang model khác.</p>
+      </div>
+    </div>
+
+    <!-- Bong bóng hội thoại -->
+    <div class="aichat-window">
+      <!-- Thanh công cụ đầu trang chat -->
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: rgba(0, 0, 0, 0.1);">
+        <span style="font-weight: 600; color: var(--gold-1); font-size: 0.95rem;">💬 Trò chuyện với trợ lý AI</span>
+        <button class="btn-clear" id="btnAichatClearTop" style="font-size: 0.85rem; padding: 6px 12px; border-radius: 6px; margin: 0; background: rgba(192, 57, 43, 0.15); border-color: rgba(192, 57, 43, 0.35); color: #ff6b6b; font-weight: bold; border-width: 1px; border-style: solid; cursor: pointer;">🗑️ Xóa lịch sử</button>
+      </div>
+      <div class="aichat-messages" id="aichatMessages"></div>
+      
+      <!-- Điều khiển & thu âm -->
+      <div class="aichat-controls">
+        <div class="aichat-status-bar">
+          <div class="aichat-status-dot" id="aichatStatusDot"></div>
+          <span class="aichat-status-text" id="aichatStatusText">Nhấn Mic để nói hoặc nhập văn bản...</span>
+        </div>
+        
+        <div class="aichat-action-area">
+          <button class="aichat-clear-btn" id="btnAichatClear" title="Xoá lịch sử chat">🗑️</button>
+          
+          <div class="aichat-mic-container">
+            <button class="aichat-mic-btn" id="btnAichatMic" title="Nhấn để nói tiếng Trung">🎤</button>
+            <div class="pulse-ring"></div>
+          </div>
+          
+          <div class="aichat-text-input-wrap">
+            <input type="text" id="aichatTextInput" class="aichat-text-input" placeholder="Hoặc gõ chữ ở đây..." autocomplete="off">
+            <button class="aichat-send-btn" id="btnAichatSend" title="Gửi">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chủ đề gợi ý -->
+    <div class="aichat-suggestions-wrap">
+      <div class="aichat-suggestions-label">💡 Gợi ý chủ đề trò chuyện:</div>
+      <div class="aichat-suggestions">
+        <button class="aichat-suggestion-chip" data-text="你好！我想用中文聊天。">👋 Chào hỏi (你好)</button>
+        <button class="aichat-suggestion-chip" data-text="我叫什么？我想介绍一下我自己。">👤 Giới thiệu bản thân</button>
+        <button class="aichat-suggestion-chip" data-text="今天的天气怎么样？你喜欢晴天还是雨天？">☀️ Hỏi thời tiết</button>
+        <button class="aichat-suggestion-chip" data-text="你有什么爱好？我喜欢听音乐和学中文。">🎵 Hỏi sở thích</button>
+        <button class="aichat-suggestion-chip" data-text="你今天忙不忙？你喜欢吃什么中国菜？">🥟 Ăn uống & Cuộc sống</button>
+        <button class="aichat-suggestion-chip" data-text="我们说说汉语学习吧，你觉得汉语难不难？">📚 Việc học tiếng Trung</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TRANG GIAO BÀI KIỂM TRA (Giáo viên) ============ -->
+  <div class="page" id="page-examEdit"></div>
+
+  <!-- ============ TRANG CHỮ KHÓ CỦA LỚP ============ -->
+  <div class="page" id="page-classDiff">
+    <div class="panel">
+      <div class="lessons-head">
+        <h3>📊 Chữ khó của lớp</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn-clear" id="clearDiffBtn">🗑 Xóa dấu khó</button>
+          <button class="btn-gold" id="refreshDiffBtn">🔄 Làm mới</button>
+        </div>
+      </div>
+      <div id="classDiff"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRANG THÀNH VIÊN ============ -->
+  <div class="page" id="page-members">
+    <div class="panel">
+      <div class="lessons-head">
+        <h3>👥 Bảng thành viên</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn-clear" id="exportMembersBtn">⬇ Xuất điểm (CSV)</button>
+          <button class="btn-gold" id="refreshMembersBtn">🔄 Làm mới</button>
+        </div>
+      </div>
+      <div id="membersList"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRANG HỌC ============ -->
+  <div class="page active" id="page-learn">
+    <div class="study-banner" id="studyBanner"></div>
+    <!-- Bảng phân tích tiến độ học tập (SRS Analytics) -->
+    <div id="srsAnalytics"></div>
+    <div class="panel">
+      <div class="quiz-controls">
+        <div class="qc-group">
+          <label for="lessonFilter">Buổi học</label>
+          <select id="lessonFilter">
+            <option value="all" selected>Tất cả</option>
+          </select>
+        </div>
+        <div class="qc-group">
+          <label for="frontSelect">Mặt trước</label>
+          <select id="frontSelect">
+            <option value="hanzi" selected>Chữ Hán</option>
+            <option value="meaning">Nghĩa</option>
+          </select>
+        </div>
+        <div class="qc-group">
+          <label for="colSelect">Số cột</label>
+          <select id="colSelect">
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="12">12</option>
+          </select>
+        </div>
+        <div class="qc-actions">
+          <button class="btn-shuffle" id="shuffleBtn">🔀 Xáo trộn</button>
+          <button class="btn-flipall" id="flipAllBtn">↩️ Úp lại hết</button>
+          <button class="btn-flag" id="flagFilterBtn">⚑ Chữ lưu ý</button>
+          <span class="count" id="count">0 chữ</span>
+        </div>
+      </div>
+    </div>
+    <div id="grid"></div>
+    <p class="hint">Bấm vào thẻ để lật ra — sẽ tự đọc chữ Hán. Bấm <strong>⚑</strong> trên thẻ để đánh dấu <strong>chữ khó</strong> cần ôn (sẽ hiện ở mục “⚑ Chữ lưu ý” và báo cho giáo viên).</p>
+  </div>
+
+  <!-- ============ TRANG KIỂM TRA ============ -->
+  <div class="page" id="page-quiz">
+    <div class="panel">
+      <div class="quiz-controls">
+        <div class="qc-group">
+          <label for="quizLessonFilter">Buổi học</label>
+          <select id="quizLessonFilter">
+            <option value="all" selected>Tất cả</option>
+          </select>
+        </div>
+        <div class="qc-group">
+          <label for="quizType">Kiểu</label>
+          <select id="quizType">
+            <option value="card" selected>Lật thẻ (tự đánh giá)</option>
+            <option value="mc">Trắc nghiệm A/B/C/D</option>
+          </select>
+        </div>
+        <div class="qc-group">
+          <label for="quizFront">Hỏi bằng</label>
+          <select id="quizFront">
+            <option value="hanzi" selected>Chữ Hán</option>
+            <option value="meaning">Nghĩa</option>
+          </select>
+        </div>
+        <div class="qc-group">
+          <label for="quizMode">Ôn</label>
+          <select id="quizMode">
+            <option value="all" selected>Tất cả</option>
+            <option value="unknown">Chữ chưa thuộc</option>
+          </select>
+        </div>
+        <button class="btn-gold qc-start" id="startQuizBtn">▶ Bắt đầu</button>
+        <div class="qc-run" id="quizRunBtns" style="display:none;">
+          <button class="btn-unknown" id="stopQuizBtn">⏹ Dừng lại</button>
+          <button class="btn-known" id="restartQuizBtn">↻ Làm lại</button>
+        </div>
+      </div>
+      <div class="quiz-progress"><div id="quizBar"></div></div>
+      <div class="quiz-timer" id="quizTimer">⏱ 0:00</div>
+    </div>
+    <div class="panel" id="quizPanel">
+      <div id="quizStage"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRANG TRÒ CHƠI GHÉP THẺ ============ -->
+  <div class="page" id="page-game">
+    <div class="panel">
+      <div class="quiz-controls">
+        <div class="qc-group">
+          <label for="gameLessonFilter">Buổi học</label>
+          <select id="gameLessonFilter">
+            <option value="all" selected>Tất cả</option>
+          </select>
+        </div>
+        <div class="qc-group">
+          <label for="gameCount">Số cặp</label>
+          <select id="gameCount">
+            <option value="6">6</option>
+            <option value="8" selected>8</option>
+            <option value="10">10</option>
+            <option value="12">12</option>
+          </select>
+        </div>
+        <div class="qc-actions">
+          <button class="btn-gold" id="startGameBtn">▶ Bắt đầu</button>
+          <div class="qc-run" id="gameRunBtns" style="display:none;">
+            <button class="btn-unknown" id="pauseGameBtn">⏸ Tạm dừng</button>
+            <button class="btn-known" id="restartGameBtn">↻ Làm lại</button>
+            <button class="btn-cancel" id="endGameBtn">⏹ Kết thúc</button>
+          </div>
+          <span class="game-timer" id="gameTimer">0.0s</span>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:10px;">Chọn 1 chữ Hán rồi chọn ô pinyin/nghĩa khớp với nó. Sai bị cộng 3s. Ghép hết thật nhanh nhé!</p>
+    </div>
+    <div id="gameStage"></div>
+  </div>
+
+  <!-- ============ THƠ CHÂN TRANG ============ -->
+  <footer class="poem">
+    <div class="poem-zh">日日学新字，心坚志不移，<br class="m-br">今朝勤努力，明日见光辉。</div>
+    <div class="poem-py">Rì rì xué xīn zì, xīn jiān zhì bù yí. — Jīn zhāo qín nǔ lì, míng rì jiàn guāng huī.</div>
+    <div class="poem-vi">Mỗi ngày học một chữ mới, lòng bền chí chẳng đổi dời.<br>Sớm nay siêng năng gắng sức, ngày mai ắt thấy rạng ngời.</div>
+    <div class="poem-sign">— Cố lên nhé, 段文强 ✦</div>
+  </footer>
+</div>
+
+<!-- Modal Confirm -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-content">
+    <p id="confirmMsg">Bạn có chắc chắn muốn xoá chữ này không?</p>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="btnConfirmNo">Không</button>
+      <button class="btn-danger" id="btnConfirmYes">Có</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Prompt -->
+<div class="modal-overlay" id="promptModal">
+  <div class="modal-content">
+    <p id="promptMsg" style="font-weight:600; margin-bottom: 12px;"></p>
+    <input type="text" id="promptInput" class="ef-input" style="width:100%; margin-bottom: 20px; text-align: center; padding: 12px; font-size: 1.1rem;" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn-cancel" id="btnPromptCancel">Hủy</button>
+      <button class="btn-gold" id="btnPromptSave">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Đăng ký thành viên (lần đầu) -->
+<div class="modal-overlay" id="regModal">
+  <div class="modal-content">
+    <p style="font-weight:700; font-size:1.15rem; color:var(--gold-1); margin-bottom:6px;">Chào mừng! 👋</p>
+    <p style="margin-bottom:16px;">Nhập thông tin để bắt đầu học:</p>
+    <input type="text" id="regName" class="ef-input" style="width:100%; margin-bottom:12px; padding:12px; font-size:1.05rem;" placeholder="Họ và tên" autocomplete="off">
+    <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:6px;">Ngày sinh</label>
+    <div style="display:flex; gap:8px; margin-bottom:6px;">
+      <select id="regDay" class="ef-input" style="flex:1; padding:12px; font-size:1.05rem;"></select>
+      <select id="regMonth" class="ef-input" style="flex:1; padding:12px; font-size:1.05rem;"></select>
+      <select id="regYear" class="ef-input" style="flex:1.2; padding:12px; font-size:1.05rem;"></select>
+    </div>
+    <p class="io-note" style="margin:0 0 18px;">💡 Đăng nhập đúng <strong>họ tên + ngày sinh</strong> ở máy tính hay điện thoại đều lấy lại được điểm &amp; tiến độ của bạn.</p>
+    <div class="modal-btns">
+      <button class="btn-gold" id="regSubmit" style="width:100%;">Bắt đầu học 🚀</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Tập viết (Stroke Order & Writing Canvas) -->
+<div class="modal-overlay" id="writeModal">
+  <div class="modal-content" style="max-width: 420px; padding: 20px;">
+    <p style="font-weight:700; font-size:1.25rem; color:var(--gold-1); margin-bottom:4px;">Tập viết chữ Hán ✍️</p>
+    <div id="writeTargetChar" style="margin-bottom: 12px; display: flex; justify-content: center; align-items: center; min-height: 50px;"></div>
+    
+    <div id="writerContainer" class="writer-container">
+      <div id="character-target-div"></div>
+    </div>
+    
+    <div id="writeStatus" class="io-note" style="margin: 0 0 16px; font-weight: bold; min-height: 20px; color: var(--gold-1); font-size: 0.9rem;">Sẵn sàng! Hãy vẽ nét đầu tiên.</div>
+    
+    <!-- AI Nhận xét nét viết -->
+    <div id="writeAiAnalysisArea" style="display: none; margin-bottom: 16px; padding: 10px; border-radius: 8px; border: 1px dashed var(--line); text-align: left; background: rgba(0,0,0,0.15);">
+      <button id="btnWriteAiExplain" class="btn-clear" style="width: 100%; font-size: 0.85rem; padding: 6px 0; display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; background: rgba(212, 175, 55, 0.1); border-color: rgba(212, 175, 55, 0.25); color: var(--gold-1); font-weight: bold; border-width: 1px; border-style: solid; border-radius: 8px; cursor: pointer;">🤖 Giáo viên AI phân tích nét viết</button>
+      <div id="writeAiExplanation" style="display: none; margin-top: 8px; line-height: 1.4; color: var(--gold-2); font-style: italic; font-size: 0.85rem;"></div>
+    </div>
+    
+    <div class="modal-btns" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+      <button class="btn-gold" id="btnWriteAnimate" style="font-size: 0.9rem; padding: 10px 6px;">🎬 Hướng dẫn</button>
+      <button class="btn-gold" id="btnWriteQuiz" style="font-size: 0.9rem; padding: 10px 6px;">✍️ Viết thử</button>
+    </div>
+    <div class="modal-btns" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+      <button class="btn-clear" id="btnWriteClear" style="font-size: 0.9rem; padding: 10px 6px;">🔄 Vẽ lại</button>
+      <button class="btn-cancel" id="btnWriteClose" style="font-size: 0.9rem; padding: 10px 6px;">❌ Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Luyện đọc AI (Speech Recognition) -->
+<div class="modal-overlay" id="pronounceModal">
+  <div class="modal-content" style="max-width: 420px; padding: 20px;">
+    <p style="font-weight:700; font-size:1.25rem; color:var(--gold-1); margin-bottom:4px;">Luyện đọc phát âm AI 🎙️</p>
+    
+    <!-- Hiển thị chữ mẫu + Pinyin -->
+    <div class="pronounce-target-wrap" style="text-align: center; margin: 15px 0;">
+      <div id="pronounceTargetText" class="big-hanzi" style="font-size: 2.5rem; margin-bottom: 5px; min-height: 50px;"></div>
+      <div id="pronounceTargetPinyin" style="color: var(--gold-1); font-size: 1.1rem; font-weight: 600; margin-bottom: 5px;"></div>
+      <div id="pronounceTargetMeaning" style="color: var(--muted); font-size: 0.95rem;"></div>
+    </div>
+    
+    <!-- Nút thu âm & Sóng âm -->
+    <div class="pronounce-mic-wrap" style="display: flex; flex-direction: column; align-items: center; margin: 20px 0; position: relative; width: 100%;">
+      <div style="position: relative; display: flex; justify-content: center; align-items: center; width: 70px; height: 70px;">
+        <button id="btnPronounceMic" class="aichat-mic-btn" style="width: 70px; height: 70px; font-size: 2rem; box-shadow: 0 0 15px rgba(212,175,55,0.4);">🎤</button>
+        <div id="pronounceWave" class="pulse-ring" style="width: 70px; height: 70px; display: none;"></div>
+      </div>
+      <div id="pronounceStatus" style="margin-top: 12px; font-weight: 600; color: var(--gold-2); font-size: 0.9rem; min-height: 20px; text-align: center;">
+        Nhấn nút Mic để bắt đầu nói
+      </div>
+    </div>
+    
+    <!-- Kết quả nhận diện và phân tích -->
+    <div id="pronounceResultArea" style="display: none; background: rgba(0,0,0,0.15); border-radius: 10px; padding: 12px; margin-bottom: 15px; border: 1px solid var(--line); text-align: left;">
+      <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 6px;">Kết quả phân tích:</div>
+      
+      <!-- Màu chữ Hán so khớp -->
+      <div id="pronounceDiffHTML" style="font-size: 1.6rem; letter-spacing: 0.05em; text-align: center; margin-bottom: 8px; font-family:'StoryScript', 'Noto Serif SC', 'Songti SC', serif;"></div>
+      
+      <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 4px;">Bạn đã nói: <span id="pronounceSpokenText" style="font-weight: 600; color: var(--text);"></span></div>
+      
+      <!-- Thanh điểm số -->
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+        <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+          <div id="pronounceScoreBar" style="height: 100%; width: 0%; background: var(--gold-1); transition: width 0.3s;"></div>
+        </div>
+        <div id="pronounceScorePct" style="font-weight: 700; color: var(--gold-1); font-size: 1.1rem; min-width: 45px; text-align: right;">0%</div>
+      </div>
+      
+      <!-- Phản hồi đánh giá -->
+      <div id="pronounceFeedback" style="font-size: 0.95rem; font-weight: 600; text-align: center; margin-top: 8px;"></div>
+      
+      <!-- AI Phân tích chi tiết -->
+      <div id="pronounceAiAnalysisArea" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 0.85rem; color: var(--text);">
+        <button id="btnPronounceAiExplain" class="btn-clear" style="width: 100%; font-size: 0.85rem; padding: 6px 0; display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; background: rgba(212, 175, 55, 0.1); border-color: rgba(212, 175, 55, 0.25); color: var(--gold-1); font-weight: bold; border-width: 1px; border-style: solid; border-radius: 8px; cursor: pointer;">🤖 Giáo viên AI phân tích lỗi phát âm</button>
+        <div id="pronounceAiExplanation" style="display: none; margin-top: 8px; line-height: 1.4; color: var(--gold-2); font-style: italic; background: rgba(0,0,0,0.15); padding: 10px; border-radius: 8px; border: 1px solid var(--line);"></div>
+      </div>
+    </div>
+    
+    <!-- Các nút thao tác -->
+    <div class="modal-btns" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+      <button class="btn-gold" id="btnPronounceListen" style="font-size: 0.9rem; padding: 10px 6px;">🔊 Nghe mẫu</button>
+      <button class="btn-cancel" id="btnPronounceClose" style="font-size: 0.9rem; padding: 10px 6px;">❌ Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (bản compat để dùng với app.js thường) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<!-- pinyin-pro for auto pinyin generation -->
+<script src="https://unpkg.com/pinyin-pro"></script>
+<!-- HanziWriter for stroke animation and quiz -->
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
+<script src="js/core.js?v=2"></script>
+<script src="js/db.js?v=1"></script>
+<script src="js/auth.js?v=2"></script>
+<script src="js/flashcard.js?v=1"></script>
+<script src="js/vocab.js?v=1"></script>
+<script src="js/quiz.js?v=1"></script>
+<script src="js/game.js?v=1"></script>
+<script src="js/passage.js?v=1"></script>
+<script src="js/writer.js?v=2"></script>
+<script src="js/dashboard.js?v=2"></script>
+<script src="js/app_init.js?v=1"></script>
+<script src="js/exam.js?v=17"></script>
+<script src="js/aichat.js?v=14"></script>
+</body>
+</html>

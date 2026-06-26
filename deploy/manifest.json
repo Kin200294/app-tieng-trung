@@ -1,0 +1,14 @@
+{
+  "name": "Học Chữ Hán Cùng 段文强",
+  "short_name": "Học Chữ Hán",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0f14",
+  "theme_color": "#0d0f14",
+  "icons": [
+    { "src": "logo1.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" },
+    { "src": "logo1.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" }
+  ]
+}

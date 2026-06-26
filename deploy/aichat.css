@@ -1,0 +1,825 @@
+/* ============================================================
+   Giao diện Phòng trò chuyện AI song ngữ (aichat.css)
+   ============================================================ */
+
+#page-aiChat {
+  display: none;
+  flex-direction: column;
+  max-width: 800px !important;
+  margin: 0 auto;
+  gap: 16px;
+  animation: fadeInUp .5s ease both;
+  min-height: calc(100vh - 220px);
+}
+
+#page-aiChat.active {
+  display: flex;
+}
+
+/* --- Vùng cấu hình API Key --- */
+.aichat-config-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+}
+
+.aichat-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.aichat-config-header h4 {
+  color: var(--gold-1);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+}
+
+.aichat-config-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.aichat-config-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aichat-config-body p {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.aichat-config-body a {
+  color: var(--gold-1);
+  text-decoration: underline;
+}
+
+.aichat-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.aichat-key-input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  outline: none;
+  font-size: 0.9rem;
+}
+
+.aichat-key-input:focus {
+  border-color: var(--gold-2);
+}
+
+/* --- Vùng gợi ý chủ đề --- */
+.aichat-suggestions-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aichat-suggestions-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.aichat-suggestions {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 4px 10px;
+  scrollbar-width: thin;
+}
+
+.aichat-suggestions::-webkit-scrollbar {
+  height: 4px;
+}
+
+.aichat-suggestions::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 2px;
+}
+
+.aichat-suggestion-chip {
+  flex: 0 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.aichat-suggestion-chip:hover {
+  background: var(--line);
+  border-color: var(--gold-2);
+  transform: translateY(-1px);
+}
+
+/* --- Cửa sổ Chat --- */
+.aichat-window {
+  flex: 1;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  height: 450px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.aichat-messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
+
+/* Bong bóng chat */
+.chat-row {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+}
+
+.chat-row.ai {
+  justify-content: flex-start;
+}
+
+.chat-row.user {
+  justify-content: flex-end;
+}
+
+.chat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.chat-row.ai .chat-avatar {
+  background: var(--gold-3);
+  border: 1px solid var(--gold-2);
+}
+
+.chat-row.user .chat-avatar {
+  background: #34495e;
+  border: 1px solid #4f6f8f;
+}
+
+.chat-bubble {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  position: relative;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-row.ai .chat-bubble {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-top-left-radius: 2px;
+  color: var(--text);
+}
+
+.chat-row.user .chat-bubble {
+  background: linear-gradient(135deg, var(--gold-2), var(--gold-3));
+  border-top-right-radius: 2px;
+  color: #1a1a24;
+}
+
+.bubble-hanzi {
+  font-family: 'StoryScript', 'Noto Serif SC', 'Songti SC', serif;
+  font-size: 1.45rem;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  word-break: break-word;
+}
+
+.chat-row.user .bubble-hanzi {
+  font-weight: 600;
+}
+
+.bubble-pinyin {
+  font-size: 0.95rem;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* Màu thanh điệu riêng trong bong bóng user để tương phản tốt trên nền vàng */
+.chat-row.user .bubble-pinyin span {
+  color: #1a1a24 !important;
+  font-weight: bold;
+}
+
+.bubble-translation {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+.chat-row.user .bubble-translation {
+  border-top-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Nút đọc lại bên cạnh tin nhắn AI */
+.bubble-play-btn {
+  background: none;
+  border: none;
+  color: var(--gold-1);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 4px;
+  transition: transform 0.2s;
+}
+
+.bubble-play-btn:hover {
+  transform: scale(1.15);
+}
+
+.chat-row.user .bubble-play-btn {
+  color: #1a1a24;
+}
+
+/* --- Vùng điều khiển & Thu âm --- */
+.aichat-controls {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.aichat-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.aichat-status-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gold-2);
+}
+
+.aichat-status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--crimson-1);
+  border-radius: 50%;
+  display: none;
+}
+
+.aichat-status-dot.active {
+  display: block;
+  animation: pulseDot 1.2s infinite;
+}
+
+.aichat-action-area {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.aichat-text-input-wrap {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 4px 8px 4px 16px;
+}
+
+.aichat-text-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  padding: 6px 0;
+}
+
+.aichat-send-btn {
+  background: var(--gold-2);
+  color: #1a1a24;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-weight: bold;
+}
+
+.aichat-send-btn:hover {
+  background: var(--gold-1);
+}
+
+/* Nút micro lớn ở trung tâm */
+.aichat-mic-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 5px 0;
+}
+
+.aichat-mic-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gold-2);
+  color: #1a1a24;
+  font-size: 1.6rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 4px 12px rgba(212,175,55,0.3);
+  z-index: 2;
+}
+
+.aichat-mic-btn:hover {
+  background: var(--gold-1);
+  transform: scale(1.05);
+}
+
+.aichat-mic-btn.recording {
+  background: var(--crimson-1);
+  color: white;
+  box-shadow: 0 0 20px rgba(192,57,43,0.5);
+  transform: scale(1.1);
+}
+
+/* Hiệu ứng vòng tròn lan tỏa khi thu âm */
+.pulse-ring {
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background-color: var(--crimson-1);
+  opacity: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.aichat-mic-btn.recording + .pulse-ring {
+  animation: pulseRing 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.aichat-clear-btn {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1.1rem;
+}
+
+.aichat-clear-btn:hover {
+  background: rgba(192, 57, 43, 0.15);
+  border-color: var(--crimson-1);
+  color: #e74c3c;
+}
+
+/* --- Light Mode Overrides --- */
+body.light .aichat-config-panel {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.1);
+}
+
+body.light .aichat-key-input {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #333;
+}
+
+body.light .aichat-suggestion-chip {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.1);
+  color: #333;
+}
+
+body.light .aichat-suggestion-chip:hover {
+  background: rgba(0,0,0,0.05);
+  border-color: var(--gold-2);
+}
+
+body.light .aichat-window {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.1);
+}
+
+body.light .chat-row.ai .chat-bubble {
+  background: #f8f9fa;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #333;
+}
+
+body.light .chat-row.user .chat-bubble {
+  background: linear-gradient(135deg, var(--gold-1), var(--gold-2));
+  color: #1a1a24;
+}
+
+body.light .chat-row.user .chat-avatar {
+  background: #cbd5e0;
+  border-color: #a0aec0;
+  color: #2d3748;
+}
+
+body.light .aichat-controls {
+  border-top-color: rgba(0, 0, 0, 0.08);
+  background: #fdfdfd;
+}
+
+body.light .aichat-text-input-wrap {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+body.light .aichat-text-input {
+  color: #333;
+}
+
+body.light .aichat-clear-btn {
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #718096;
+}
+
+body.light .aichat-clear-btn:hover {
+  background: #fff5f5;
+  border-color: #feb2b2;
+  color: #e53e3e;
+}
+
+/* --- Hoạt họa CSS --- */
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes pulseDot {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0.5;
+  }
+}
+
+/* Nút luyện đọc phát âm trên các thẻ (Flashcards) và bài khóa */
+.read-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px; /* Đặt ở góc dưới bên phải đối xứng với Tập viết ở bên trái */
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  color: var(--gold-1);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.read-btn:hover {
+  background: var(--gold-2);
+  color: #1a1a24;
+  transform: scale(1.1);
+}
+
+body.light .read-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #b7791f;
+}
+
+body.light .read-btn:hover {
+  background: var(--gold-1);
+  color: #1a1a24;
+}
+
+/* Thêm nút micro vào thẻ Bài khóa */
+.pa-read-btn {
+  background: var(--gold-2);
+  color: #1a1a24;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 6px rgba(212,175,55,0.3);
+}
+
+.pa-read-btn:hover {
+  background: var(--gold-1);
+  transform: translateY(-1px);
+}
+
+/* --- Modal Luyện đọc (đúng/sai) --- */
+.pronounce-target-wrap {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+}
+
+body.light .pronounce-target-wrap {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Tô màu ký tự đúng/sai trong phần phân tích */
+.char-result {
+  display: inline-block;
+  margin: 0 2px;
+  font-size: 2.2rem;
+  font-weight: bold;
+}
+
+.char-result.correct {
+  color: var(--green-1, #3ed18a) !important;
+  text-shadow: 0 0 10px rgba(62,209,138,0.2);
+}
+
+.char-result.incorrect {
+  color: var(--crimson-1, #c0392b) !important;
+  opacity: 0.7;
+  text-shadow: 0 0 10px rgba(192,57,43,0.1);
+}
+
+body.light .char-result.correct {
+  color: #2f855a !important;
+}
+
+body.light .char-result.incorrect {
+  color: #c53030 !important;
+}
+
+/* ============================================================
+   Tối ưu hóa hiển thị trên thiết bị di động (Mobile Responsive)
+   ============================================================ */
+@media (max-width: 600px) {
+  /* --- Tab Chat chính --- */
+  #page-aiChat {
+    gap: 10px;
+    padding: 0 4px;
+    min-height: calc(100vh - 180px);
+  }
+
+  /* --- Vùng cấu hình API Key --- */
+  .aichat-config-panel {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+  .aichat-config-header h4 {
+    font-size: 0.95rem;
+  }
+  .aichat-config-body {
+    gap: 8px;
+  }
+  .aichat-input-row {
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch !important;
+  }
+  .aichat-input-row label {
+    margin-bottom: 2px;
+    font-size: 0.8rem !important;
+  }
+  .aichat-key-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+  .aichat-config-body p {
+    font-size: 0.8rem;
+  }
+
+  /* --- Cửa sổ Chat --- */
+  .aichat-window {
+    height: clamp(320px, 58vh, 480px) !important;
+    border-radius: 16px;
+  }
+  .aichat-messages {
+    padding: 10px 12px;
+    gap: 12px;
+  }
+
+  /* --- Bong bóng tin nhắn --- */
+  .chat-bubble {
+    max-width: 85%;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+  .chat-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+  }
+  .bubble-hanzi {
+    font-size: 1.25rem;
+    line-height: 1.35;
+  }
+  .bubble-pinyin {
+    font-size: 0.85rem;
+  }
+  .bubble-translation {
+    font-size: 0.8rem;
+    padding-top: 3px;
+    margin-top: 1px;
+  }
+  .bubble-play-btn {
+    font-size: 0.9rem;
+    margin-top: 2px;
+  }
+
+  /* --- Gợi ý chủ đề --- */
+  .aichat-suggestions-label {
+    font-size: 0.8rem;
+  }
+  .aichat-suggestions {
+    gap: 6px;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .aichat-suggestions::-webkit-scrollbar {
+    display: none !important; /* Ẩn hoàn toàn scrollbar trên di động */
+  }
+  .aichat-suggestion-chip {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    border-radius: 16px;
+  }
+
+  /* --- Vùng điều khiển & Thu âm --- */
+  .aichat-controls {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .aichat-status-text {
+    font-size: 0.8rem;
+  }
+  .aichat-action-area {
+    gap: 8px;
+  }
+  
+  /* Ô nhập văn bản */
+  .aichat-text-input-wrap {
+    padding: 2px 4px 2px 10px;
+    border-radius: 20px;
+    gap: 4px;
+  }
+  .aichat-text-input {
+    font-size: 0.85rem;
+    padding: 4px 0;
+  }
+  .aichat-send-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8rem;
+  }
+
+  /* Nút Micro chính */
+  .aichat-mic-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1.3rem;
+    box-shadow: 0 3px 8px rgba(212,175,55,0.25);
+  }
+  .pulse-ring {
+    width: 48px;
+    height: 48px;
+  }
+  .aichat-clear-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+  }
+
+  /* --- Modal Luyện đọc phát âm di động --- */
+  #pronounceModal .modal-content {
+    max-width: 92% !important;
+    padding: 16px 12px !important;
+    border-radius: 16px;
+  }
+  #pronounceModal .modal-content p {
+    font-size: 1.1rem;
+  }
+  #pronounceTargetText {
+    font-size: 2rem !important; /* Thu nhỏ chữ Hán mẫu */
+    min-height: 40px !important;
+  }
+  #pronounceTargetPinyin {
+    font-size: 0.95rem !important;
+  }
+  #pronounceTargetMeaning {
+    font-size: 0.85rem !important;
+  }
+  #btnPronounceMic {
+    width: 56px !important;
+    height: 56px !important;
+    font-size: 1.6rem !important;
+  }
+  #pronounceWave {
+    width: 56px !important;
+    height: 56px !important;
+  }
+  #pronounceStatus {
+    font-size: 0.8rem !important;
+    margin-top: 8px !important;
+  }
+  .char-result {
+    font-size: 1.8rem !important; /* Thu nhỏ ký tự kết quả phân tích */
+  }
+  #pronounceSpokenText {
+    font-size: 0.85rem;
+  }
+  #pronounceFeedback {
+    font-size: 0.85rem !important;
+  }
+}
