@@ -9,14 +9,14 @@
 
 ### ✅ Đã hoàn thành
 
-#### 1. Nâng cấp thiết kế Typography & Tích hợp bong bóng hoạt họa AI đang suy nghĩ
-- **Mô tả:** Tích hợp font chữ sans-serif cao cấp `Outfit` và `Inter` từ Google Fonts giúp giao diện hiện đại và chuyên nghiệp hơn. Đồng thời, thiết kế hiệu ứng hoạt họa 3 dấu chấm nhảy múa (Typing Indicator) nằm bên trong một bong bóng chat của AI tự động hiển thị ngay khi người dùng bấm gửi và tự biến mất sau khi nhận được câu trả lời. Bong bóng này còn có hiệu ứng viền phát sáng nhịp thở (breathing glow) đẹp mắt.
+#### 1. Nâng cấp thiết kế Typography, hoạt họa suy nghĩ & Cố định chiều cao khung Chat để cuộn tin nhắn
+- **Mô tả:** Tích hợp font chữ sans-serif cao cấp `Outfit` và `Inter` từ Google Fonts giúp giao diện hiện đại hơn. Tích hợp bong bóng hoạt họa 3 dấu chấm nhấp nhô (Typing Indicator) kèm hiệu ứng phát sáng nhẹ nhàng khi AI đang nghĩ. Đặc biệt, loại bỏ thuộc tính `flex: 1` và cố định chiều cao `.aichat-window` ở mức `520px` trên desktop, buộc danh sách tin nhắn `.aichat-messages` tự động cuộn dọc (scroll-y) bên trong khung thay vì kéo dài trang web vô tận.
 - **Files thay đổi:**
   - `deploy/index.html` — Tải font `Outfit` và `Inter` từ Google Fonts, bump version cache CSS/JS.
   - `deploy/styles.css` — Thiết lập font-family mặc định cho body thành `Outfit` và `Inter`.
-  - `deploy/aichat.css` — Bổ sung CSS cho typing indicator, thinking-bubble, animations `bounceDot` và `pulseThinking`.
-  - `deploy/js/aichat.js` — Thêm logic tự động chèn/xóa bong bóng thinking khi `isThinking` thay đổi trạng thái trong `handleUserMessage` và `renderChatMessages`.
-  - `deploy/sw.js` — Nâng cache version lên `hochan-v25`.
+  - `deploy/aichat.css` — Thiết lập chiều cao cố định `520px` cho `.aichat-window` trên desktop, bổ sung CSS hoạt họa.
+  - `deploy/js/aichat.js` — Thêm logic tự động chèn/xóa bong bóng thinking khi `isThinking` thay đổi trạng thái.
+  - `deploy/sw.js` — Nâng cache version lên `hochan-v26`.
 
 #### 2. Tự động điền và xoay vòng API Key dự phòng (API Key Rotation)
 - **Mô tả:** Học sinh không cần lấy và nhập API key thủ công nữa. Hệ thống tự động thiết lập và lưu trữ 3 API key mặc định do giáo viên cung cấp. Nếu người dùng để trống phần API Key, hệ thống tự động tải key mặc định và kích hoạt cơ chế xoay vòng mà không đưa ra cảnh báo làm phiền người dùng. Nếu trong quá trình sử dụng gặp lỗi quá tải quota (429) hoặc lỗi xác thực (400/403), hệ thống sẽ tự động xoay vòng sang key tiếp theo trong danh sách dự phòng và thực hiện lại yêu cầu API ngay lập tức.

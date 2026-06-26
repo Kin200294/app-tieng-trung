@@ -141,11 +141,10 @@
 
 /* --- Cửa sổ Chat --- */
 .aichat-window {
-  flex: 1;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 20px;
-  height: 450px;
+  height: 520px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
