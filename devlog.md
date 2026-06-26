@@ -10,13 +10,13 @@
 ### ✅ Đã hoàn thành
 
 #### 1. Tự động điền và xoay vòng API Key dự phòng (API Key Rotation)
-- **Mô tả:** Học sinh không cần lấy và nhập API key thủ công nữa. Hệ thống tự động thiết lập và lưu trữ 3 API key mặc định do giáo viên cung cấp. Nếu trong quá trình sử dụng gặp lỗi quá tải quota (429) hoặc lỗi xác thực (400/403), hệ thống sẽ tự động xoay vòng sang key tiếp theo trong danh sách dự phòng và thực hiện lại yêu cầu API ngay lập tức.
+- **Mô tả:** Học sinh không cần lấy và nhập API key thủ công nữa. Hệ thống tự động thiết lập và lưu trữ 3 API key mặc định do giáo viên cung cấp. Nếu người dùng để trống phần API Key, hệ thống tự động tải key mặc định và kích hoạt cơ chế xoay vòng mà không đưa ra cảnh báo làm phiền người dùng. Nếu trong quá trình sử dụng gặp lỗi quá tải quota (429) hoặc lỗi xác thực (400/403), hệ thống sẽ tự động xoay vòng sang key tiếp theo trong danh sách dự phòng và thực hiện lại yêu cầu API ngay lập tức.
 - **Files thay đổi:**
-  - `deploy/js/core.js` — Thêm danh sách API key mặc định, hàm `getGeminiKey()`, `rotateGeminiKey()` và `isDefaultGeminiKey()`.
-  - `deploy/js/aichat.js` — Sử dụng `window.getGeminiKey()` để lấy key, nâng cấp hàm `callGeminiAPI` và `callGeminiAnalysis` để tự động phát hiện lỗi API key/quota, tự động xoay vòng và thử lại.
+  - `deploy/js/core.js` — Thêm danh sách API key mặc định, hàm `getGeminiKey()`, `rotateGeminiKey()` và `isDefaultGeminiKey()`. Đồng bộ giá trị input khi khôi phục key.
+  - `deploy/js/aichat.js` — Sử dụng `window.getGeminiKey()` làm dự phòng khi key rỗng thay vì ném cảnh báo, nâng cấp `callGeminiAPI` và `callGeminiAnalysis` tự động xoay vòng key.
   - `deploy/js/writer.js` — Tương thích hóa `callWriteAiAnalysis` để thực hiện xoay vòng API Key tương tự khi phân tích nét viết lỗi.
-  - `deploy/index.html` — Bump phiên bản JS file cache (`core.js?v=4`, `writer.js?v=3`, `aichat.js?v=21`).
-  - `deploy/sw.js` — Nâng cache version lên `hochan-v23`.
+  - `deploy/index.html` — Bump phiên bản JS file cache (`core.js?v=5`, `writer.js?v=3`, `aichat.js?v=22`).
+  - `deploy/sw.js` — Nâng cache version lên `hochan-v24`.
 
 #### 2. Phân tách lịch sử trò chuyện AI theo tài khoản thành viên
 - **Mô tả:** Thay vì chia sẻ chung một lịch sử chat trên trình duyệt, lịch sử trò chuyện của AI giáo viên "Tiểu Hoa" được lưu và tải độc lập theo từng tài khoản thành viên (`localStorage` key có chứa profile ID dạng `hanzi-aichat-history-{profileId}`).

@@ -323,6 +323,10 @@
     if (!key) {
       key = DEFAULT_GEMINI_KEYS[0];
       localStorage.setItem('hanzi-gemini-api-key', key);
+      const input = document.getElementById('geminiApiKeyInput');
+      if (input) {
+        input.value = key;
+      }
     }
     return key;
   };

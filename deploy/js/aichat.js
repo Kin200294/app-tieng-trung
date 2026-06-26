@@ -201,7 +201,11 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     // Lưu API Key + Model
     if ($('btnSaveApiKey')) {
       $('btnSaveApiKey').onclick = () => {
-        const val = $('geminiApiKeyInput').value.trim();
+        let val = $('geminiApiKeyInput').value.trim();
+        if (!val) {
+          val = window.getGeminiKey();
+          $('geminiApiKeyInput').value = val;
+        }
         geminiKey = val;
         localStorage.setItem(API_KEY_KEY, val);
         // Lưu model đã chọn
@@ -606,11 +610,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
 
     // Kiểm tra API Key trước khi thực hiện gửi
     if (!geminiKey) {
-      alertUi('Vui lòng nhập API Key Gemini và bấm "Lưu" ở thanh cài đặt phía trên để kích hoạt trò chuyện AI.');
-      // Tự động mở hộp cài đặt
-      if ($('aichatConfigBody')) $('aichatConfigBody').style.display = 'flex';
-      if ($('btnToggleConfig')) $('btnToggleConfig').textContent = '▲';
-      return;
+      geminiKey = window.getGeminiKey();
     }
 
     // 1. Thêm tin nhắn của User vào lịch sử và render
@@ -957,7 +957,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   // --- Gọi API Gemini để phân tích lỗi phát âm (có tự động chuyển model và API key) ---
   async function callGeminiAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
     if (!geminiKey) {
-      throw new Error('Chưa có API Key. Vui lòng cấu hình ở tab Trò chuyện AI.');
+      geminiKey = window.getGeminiKey();
     }
 
     const currentModel = modelOverride || (selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : selectedModel);
