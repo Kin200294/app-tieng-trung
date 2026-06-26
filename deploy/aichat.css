@@ -631,12 +631,21 @@ body.light .pronounce-target-wrap {
   text-shadow: 0 0 10px rgba(192,57,43,0.1);
 }
 
+.char-result.partial {
+  color: var(--gold-1, #f3d98b) !important;
+  text-shadow: 0 0 10px rgba(243,217,139,0.2);
+}
+
 body.light .char-result.correct {
   color: #2f855a !important;
 }
 
 body.light .char-result.incorrect {
   color: #c53030 !important;
+}
+
+body.light .char-result.partial {
+  color: #b7791f !important;
 }
 
 /* ============================================================

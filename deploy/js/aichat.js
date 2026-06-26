@@ -935,7 +935,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
     updatePronounceStatus('Đã nhận diện giọng nói xong.');
   }
 
-  // Thuật toán so khớp chuỗi con chung dài nhất (LCS) cho chữ Hán
+  // Thuật toán so khớp chuỗi con chung dài nhất (LCS) cho chữ Hán & Pinyin
   function getLcsDiff(target, spoken) {
     // Làm sạch chuỗi: xóa dấu cách và các dấu câu thông dụng
     const cleanStr = (str) => (str || '').replace(/[\s\p{P}]/gu, '');
@@ -943,36 +943,111 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
     const s = cleanStr(spoken);
 
     if (!t) return { html: '', score: 0 };
-    if (!s) {
-      // Nếu nói rỗng, hiển thị đỏ tất cả chữ Hán mục tiêu
+
+    // Helper làm sạch Pinyin để so sánh
+    const cleanPinyin = (py) => {
+      if (!py) return '';
+      return py.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z]/g, '');
+    };
+
+    // Helper tính độ tương đồng Pinyin không dấu (Levenshtein distance)
+    const getPinyinSimilarity = (py1, py2) => {
+      const s1 = cleanPinyin(py1);
+      const s2 = cleanPinyin(py2);
+      if (!s1 || !s2) return 0;
+      if (s1 === s2) return 1;
+
+      const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+      for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
+      for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
+      for (let j = 1; j <= s2.length; j += 1) {
+        for (let i = 1; i <= s1.length; i += 1) {
+          const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+          track[j][i] = Math.min(
+            track[j - 1][i] + 1,
+            track[j][i - 1] + 1,
+            track[j - 1][i - 1] + indicator
+          );
+        }
+      }
+      const distance = track[s2.length][s1.length];
+      const maxLength = Math.max(s1.length, s2.length);
+      return maxLength > 0 ? (1 - distance / maxLength) : 0;
+    };
+
+    // Phân tích Pinyin từng chữ Hán
+    const tPinyins = window.pinyinPro ? window.pinyinPro.pinyin(t).split(/\s+/) : [];
+    const sPinyins = window.pinyinPro ? window.pinyinPro.pinyin(s).split(/\s+/) : [];
+
+    // Tạo danh sách đối tượng
+    const tArr = [];
+    for (let k = 0; k < t.length; k++) {
+      tArr.push({
+        char: t[k],
+        pinyin: tPinyins[k] || '',
+        rawPinyin: cleanPinyin(tPinyins[k] || '')
+      });
+    }
+
+    const sArr = [];
+    for (let k = 0; k < s.length; k++) {
+      sArr.push({
+        char: s[k] || '',
+        pinyin: sPinyins[k] || '',
+        rawPinyin: cleanPinyin(sPinyins[k] || '')
+      });
+    }
+
+    if (sArr.length === 0) {
       let html = '';
-      for (const char of t) {
-        html += `<span class="char-result incorrect">${esc(char)}</span>`;
+      for (const item of tArr) {
+        html += `<span class="char-result incorrect">${esc(item.char)}</span>`;
       }
       return { html, score: 0 };
     }
 
-    // Dynamic Programming LCS
-    const m = t.length;
-    const n = s.length;
+    const m = tArr.length;
+    const n = sArr.length;
     const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+    // Hàm chấm điểm khớp giữa ký tự target i và spoken j
+    // Trả về: 2 (Khớp hoàn toàn: trùng chữ Hán hoặc trùng Pinyin có dấu)
+    //         1 (Khớp gần đúng: trùng Pinyin không dấu hoặc độ tương đồng >= 60%)
+    //         0 (Không khớp)
+    function getMatchScore(itemT, itemS) {
+      if (!itemT || !itemS) return 0;
+      if (itemT.char === itemS.char || (itemT.pinyin && itemT.pinyin === itemS.pinyin)) {
+        return 2;
+      }
+      if (itemT.rawPinyin && itemT.rawPinyin === itemS.rawPinyin) {
+        return 1;
+      }
+      if (getPinyinSimilarity(itemT.pinyin, itemS.pinyin) >= 0.6) {
+        return 1;
+      }
+      return 0;
+    }
 
     for (let i = 1; i <= m; i++) {
       for (let j = 1; j <= n; j++) {
-        if (t[i - 1] === s[j - 1]) {
-          dp[i][j] = dp[i - 1][j - 1] + 1;
+        const match = getMatchScore(tArr[i - 1], sArr[j - 1]);
+        if (match > 0) {
+          dp[i][j] = dp[i - 1][j - 1] + match;
         } else {
           dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
         }
       }
     }
 
-    // Truy vết ngược để tìm các vị trí khớp
     let i = m, j = n;
-    const matchedIndices = new Set();
+    const matchResults = {};
     while (i > 0 && j > 0) {
-      if (t[i - 1] === s[j - 1]) {
-        matchedIndices.add(i - 1);
+      const match = getMatchScore(tArr[i - 1], sArr[j - 1]);
+      if (match > 0) {
+        matchResults[i - 1] = match;
         i--;
         j--;
       } else if (dp[i - 1][j] >= dp[i][j - 1]) {
@@ -982,20 +1057,25 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       }
     }
 
-    // Tạo mã HTML phản hồi trực quan
     let html = '';
-    let correctCount = 0;
-    for (let k = 0; k < t.length; k++) {
-      const isMatch = matchedIndices.has(k);
-      if (isMatch) {
-        correctCount++;
-        html += `<span class="char-result correct">${esc(t[k])}</span>`;
+    let totalScorePoints = 0;
+    const maxScorePoints = m * 2;
+
+    for (let k = 0; k < tArr.length; k++) {
+      const match = matchResults[k] || 0;
+      const char = tArr[k].char;
+      if (match === 2) {
+        totalScorePoints += 2;
+        html += `<span class="char-result correct">${esc(char)}</span>`;
+      } else if (match === 1) {
+        totalScorePoints += 1.5; // Đọc gần đúng nhận 75% số điểm
+        html += `<span class="char-result partial" title="Phát âm gần đúng (hoặc sai thanh điệu)">${esc(char)}</span>`;
       } else {
-        html += `<span class="char-result incorrect">${esc(t[k])}</span>`;
+        html += `<span class="char-result incorrect">${esc(char)}</span>`;
       }
     }
 
-    const score = Math.round((correctCount / Math.max(t.length, s.length)) * 100);
+    const score = maxScorePoints > 0 ? Math.round((totalScorePoints / maxScorePoints) * 100) : 0;
     return { html, score };
   }
 
