@@ -102,12 +102,41 @@
   - Tích hợp **thuật toán khoảng cách Levenshtein (String Similarity)** đo độ tương đồng Pinyin không dấu. Nếu độ tương đồng >= 60% (như `ni` và `nin`), tính là **Khớp gần đúng** (partial match - hiển thị chữ màu vàng đất/cam và nhận 75% số điểm).
   - Tự động nhận diện chữ đồng âm (Pinyin trùng nhau hoàn toàn) làm **Khớp hoàn toàn** (correct - màu xanh lá, nhận 100% số điểm).
   - Bổ sung CSS cho class `.char-result.partial` trong `aichat.css` tương thích tốt ở cả 2 tông màu sáng/tối.
-  - Bump cache version trong `index.html` và `sw.js` (hochan-v18).
+#### 6. Nâng cấp nhận diện giọng nói bằng nhiều phương án so khớp (Alternatives Matching) và hiển thị kết quả thời gian thực (Interim Results)
+- **Mô tả:** Tăng khả năng nhận diện chính xác của Web Speech API bằng cách lấy nhiều phương án phán đoán và tự động chọn phương án tốt nhất, đồng thời tăng tính tương tác bằng việc hiển thị chữ chạy trực tiếp theo thời gian thực khi học sinh đang nói.
+- **Cách làm:**
+  - Thiết lập `maxAlternatives = 5` và `interimResults = true` cho cả hai trình nhận dạng giọng nói (`speechRec` và `pronounceRec`).
+  - Viết lại hàm `onresult` để phân tách kết quả tạm thời (interim transcript) hiển thị lên trạng thái (*Đang nghe: "..."*), và kết quả cuối cùng (final transcript).
+  - Đối với modal luyện phát âm: duyệt qua cả 5 phương án dự đoán của Google Speech API, chấm điểm thử từng cái thông qua thuật toán `getLcsDiff` so khớp với từ mẫu, và tự động chọn phương án có điểm số cao nhất để lưu kết quả chấm điểm cuối cùng.
+  - Bump phiên bản `aichat.js?v=17` trong `index.html` và nâng Service Worker lên `hochan-v19`.
+
+#### 7. Tối ưu hóa tốc độ phản hồi của AI Giáo viên và chấm điểm phát âm (Auto-stop khi im lặng)
+- **Mô tả:** Giải quyết triệt để vấn đề AI phản hồi chậm ở cả phần chấm điểm phát âm (đọc xong) và cuộc trò chuyện của giáo viên.
+- **Cách làm:**
+  - Tích hợp cơ chế tự ngắt ghi âm khi im lặng: Sau khi học sinh dừng nói 900ms (luyện phát âm) hoặc 1.2 giây (chat chính), hệ thống chủ động gọi `.stop()` để trình duyệt trả về kết quả final ngay lập tức, tiết kiệm 1-2 giây chờ mặc định của trình duyệt.
+  - Thay đổi model mặc định từ `gemini-2.5-flash` sang `gemini-2.5-flash-lite` để đẩy tốc độ sinh text lên tối đa và tăng quota RPM lên 30.
+  - Tự động chuyển đổi sang model Lite (`gemini-2.5-flash-lite`) cho tác vụ giải thích lỗi phát âm để phản hồi siêu tốc.
+  - Giảm `temperature` (xuống `0.4` cho chat và `0.2` cho giải thích phát âm) giúp AI phản hồi tập trung và nhanh hơn.
+  - Bump phiên bản `aichat.js?v=18` trong `index.html` và nâng Service Worker lên `hochan-v20`.
+
+#### 8. Sửa triệt để logic Luyện Nói (Speech Recognition) — Khắc phục 6 nguyên nhân gốc rễ
+- **Mô tả:** Viết lại hoàn toàn logic `pronounceRec` (nhận diện giọng nói modal luyện đọc) để khắc phục triệt để vấn đề học sinh nói nhưng hệ thống không nhận, hoặc nhiều câu bị lỗi.
+- **6 nguyên nhân gốc rễ đã sửa:**
+  1. **Không auto-restart khi mic dừng mà chưa có kết quả:** Thêm `continuous = true` và cơ chế auto-restart tối đa 3 lần khi `onend` fire mà chưa có `finalTranscript`.
+  2. **Silence timer quá nhạy (900ms):** Tăng lên 1500ms cho từ đơn và 2500ms cho câu dài; chỉ bắt đầu đếm SAU KHI nhận ít nhất 1 interim result (tránh mic warmup).
+  3. **Không xử lý finalTranscript rỗng:** Hiển thị thông báo rõ ràng và tự động restart.
+  4. **pinyin-pro CDN không ổn định:** Chuyển từ `unpkg.com` sang `cdn.jsdelivr.net` (phiên bản cố định 3.26.0); thêm try-catch fallback so khớp chữ thuần khi lib fail.
+  5. **Xung đột bấm mic nhanh liên tục:** Thêm debounce 500ms và xử lý `InvalidStateError` với retry sau 600ms.
+  6. **Tích lũy final segments sai:** Dùng `pronounceAccumulatedText` để tích lũy tất cả final segments từ continuous mode.
+- **Files thay đổi:**
+  - `deploy/js/aichat.js` (BUMP) — Viết lại pronounceRec: onstart, onend (auto-restart), onerror (retry no-speech), onresult (accumulated text), nút mic (debounce + InvalidStateError), closePronounceModal (reset states), getLcsDiff (pinyin-pro fallback), callGeminiAnalysis (try-catch pinyin).
+  - `deploy/index.html` — Bump `aichat.js?v=19`, chuyển CDN pinyin-pro sang jsdelivr.
+  - `deploy/sw.js` — Nâng cache lên `hochan-v21`.
 
 ### 🔧 Cấu hình hiện tại
 - **API Key:** Lưu tại `localStorage`.
-- **Model mặc định:** `gemini-2.5-flash` (và tự động fallback).
-- **CSS Cache:** `aichat.css?v=3`, `dashboard.css?v=1`, **JS Cache:** `js/core.js?v=3`, `js/db.js?v=1`, `js/auth.js?v=2`, `js/flashcard.js?v=1`, `js/vocab.js?v=1`, `js/quiz.js?v=1`, `js/game.js?v=1`, `js/passage.js?v=1`, `js/writer.js?v=2`, `js/dashboard.js?v=2`, `js/app_init.js?v=1`, `js/exam.js?v=17`, `js/aichat.js?v=16`.
+- **Model mặc định:** `gemini-2.5-flash-lite` (và tự động fallback).
+- **CSS Cache:** `aichat.css?v=3`, `dashboard.css?v=1`, **JS Cache:** `js/core.js?v=3`, `js/db.js?v=1`, `js/auth.js?v=2`, `js/flashcard.js?v=1`, `js/vocab.js?v=1`, `js/quiz.js?v=1`, `js/game.js?v=1`, `js/passage.js?v=1`, `js/writer.js?v=2`, `js/dashboard.js?v=2`, `js/app_init.js?v=1`, `js/exam.js?v=17`, `js/aichat.js?v=19`.
 
 ### 📋 Kế hoạch tiếp theo
 - [ ] Tích hợp tính năng AI hỗ trợ giáo viên chấm nhanh bài tự luận trong bài kiểm tra.

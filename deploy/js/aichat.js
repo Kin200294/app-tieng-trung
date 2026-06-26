@@ -20,7 +20,7 @@
 
   // --- Trạng thái ---
   let geminiKey = localStorage.getItem(API_KEY_KEY) || '';
-  let selectedModel = localStorage.getItem(MODEL_KEY) || 'gemini-2.5-flash';
+  let selectedModel = localStorage.getItem(MODEL_KEY) || 'gemini-2.5-flash-lite';
   let chatHistory = [];
   let lastProfileString = ''; // Theo dõi chuỗi JSON profile trong localStorage để phát hiện đổi tài khoản
   let speechRec = null;
@@ -34,6 +34,23 @@
   let currentPronouncePinyin = '';
   let currentPronounceMeaning = '';
   let currentPronounceCallback = null; // Gọi sau khi hoàn tất nói trong modal
+
+  // Biến kiểm soát nâng cao cho Luyện đọc (khai báo ở IIFE scope để closePronounceModal truy cập được)
+  let pronounceGotResult = false;
+  let pronounceRetryCount = 0;
+  const PRONOUNCE_MAX_RETRY = 3;
+  let pronounceWantActive = false;
+  let pronounceAccumulatedText = '';
+  let pronounceHasInterim = false;
+
+  // Các biến kiểm soát thời gian im lặng để dừng mic tự động (nhanh phản hồi)
+  let speechSilenceTimer = null;
+  let speechLastTime = 0;
+  let speechLastText = '';
+
+  let pronounceSilenceTimer = null;
+  let pronounceLastTime = 0;
+  let pronounceLastText = '';
 
   // --- Các hàm quản lý Lịch sử chat theo tài khoản ---
   function getCurrentHistoryKey() {
@@ -244,8 +261,8 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     // 1. Nhận diện giọng nói cho trang Chat chính
     speechRec = new SpeechRecClass();
     speechRec.lang = 'zh-CN'; // Thiết lập nhận diện tiếng Trung
-    speechRec.interimResults = false;
-    speechRec.maxAlternatives = 1;
+    speechRec.interimResults = true;
+    speechRec.maxAlternatives = 5;
 
     speechRec.onstart = () => {
       isRecActive = true;
@@ -254,10 +271,26 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       const dot = $('aichatStatusDot');
       if (dot) dot.classList.add('active');
       updateStatus('Đang lắng nghe... Hãy nói tiếng Trung 🗣️');
+
+      // Khởi tạo các biến kiểm soát thời gian im lặng
+      speechLastTime = Date.now();
+      speechLastText = '';
+      if (speechSilenceTimer) clearInterval(speechSilenceTimer);
+      speechSilenceTimer = setInterval(() => {
+        if (isRecActive && speechLastText && Date.now() - speechLastTime > 1200) {
+          console.log('Tự động dừng speechRec do học sinh dừng nói 1.2s');
+          clearInterval(speechSilenceTimer);
+          speechRec.stop();
+        }
+      }, 300);
     };
 
     speechRec.onend = () => {
       isRecActive = false;
+      if (speechSilenceTimer) {
+        clearInterval(speechSilenceTimer);
+        speechSilenceTimer = null;
+      }
       const btn = $('btnAichatMic');
       if (btn) btn.classList.remove('recording');
       const dot = $('aichatStatusDot');
@@ -269,6 +302,10 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
 
     speechRec.onerror = (e) => {
       isRecActive = false;
+      if (speechSilenceTimer) {
+        clearInterval(speechSilenceTimer);
+        speechSilenceTimer = null;
+      }
       const btn = $('btnAichatMic');
       if (btn) btn.classList.remove('recording');
       const dot = $('aichatStatusDot');
@@ -288,9 +325,28 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     };
 
     speechRec.onresult = (event) => {
-      const text = event.results[0][0].transcript;
-      if (text && text.trim()) {
-        handleUserMessage(text.trim());
+      let interimTranscript = '';
+      let finalTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          // Lấy phương án đầu tiên đáng tin cậy nhất cho phần chat thông thường
+          finalTranscript = event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      if (interimTranscript) {
+        if (interimTranscript !== speechLastText) {
+          speechLastText = interimTranscript;
+          speechLastTime = Date.now(); // Cập nhật mốc thời gian khi có từ mới
+        }
+        updateStatus(`Đang nghe: "${interimTranscript}"...`, true);
+      }
+      
+      if (finalTranscript && finalTranscript.trim()) {
+        handleUserMessage(finalTranscript.trim());
       }
     };
 
@@ -313,67 +369,221 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     }
 
     // 2. Nhận diện giọng nói cho Modal Luyện đọc
+    // --- Reset biến kiểm soát nâng cao (đã khai báo ở IIFE scope) ---
+    pronounceGotResult = false;
+    pronounceRetryCount = 0;
+    pronounceWantActive = false;
+    pronounceAccumulatedText = '';
+    pronounceHasInterim = false;
+
     pronounceRec = new SpeechRecClass();
     pronounceRec.lang = 'zh-CN';
-    pronounceRec.interimResults = false;
-    pronounceRec.maxAlternatives = 1;
+    pronounceRec.interimResults = true;
+    pronounceRec.maxAlternatives = 5;
+    pronounceRec.continuous = true;     // Tiếp tục lắng nghe sau mỗi đoạn
 
     pronounceRec.onstart = () => {
       isPronounceRecActive = true;
+      pronounceHasInterim = false;
       const btn = $('btnPronounceMic');
       if (btn) btn.classList.add('recording');
       const wave = $('pronounceWave');
       if (wave) wave.style.display = 'block';
-      updatePronounceStatus('Đang lắng nghe... Mời bạn nói.');
+      updatePronounceStatus('Đang lắng nghe... Mời bạn nói 🗣️');
+
+      // Khởi tạo các biến kiểm soát thời gian im lặng
+      pronounceLastTime = Date.now();
+      pronounceLastText = '';
+      if (pronounceSilenceTimer) clearInterval(pronounceSilenceTimer);
+
+      // Tính silence timeout thông minh theo độ dài câu mẫu
+      const targetLen = (currentPronounceTarget || '').replace(/[\s\p{P}]/gu, '').length;
+      const silenceTimeout = targetLen <= 2 ? 1500 : 2500; // 1.5s cho từ đơn, 2.5s cho câu dài
+
+      pronounceSilenceTimer = setInterval(() => {
+        // Chỉ bắt đầu đếm im lặng SAU KHI đã nhận ít nhất 1 interim result
+        if (isPronounceRecActive && pronounceHasInterim && Date.now() - pronounceLastTime > silenceTimeout) {
+          console.log(`Tự động dừng pronounceRec do im lặng ${silenceTimeout}ms`);
+          clearInterval(pronounceSilenceTimer);
+          pronounceSilenceTimer = null;
+          pronounceWantActive = false; // Đánh dấu dừng chủ động
+          try { pronounceRec.stop(); } catch (e) {}
+        }
+      }, 250);
     };
 
     pronounceRec.onend = () => {
       isPronounceRecActive = false;
+      if (pronounceSilenceTimer) {
+        clearInterval(pronounceSilenceTimer);
+        pronounceSilenceTimer = null;
+      }
       const btn = $('btnPronounceMic');
       if (btn) btn.classList.remove('recording');
       const wave = $('pronounceWave');
       if (wave) wave.style.display = 'none';
+
+      // --- Auto-restart logic ---
+      // Nếu học sinh vẫn muốn mic mở VÀ chưa có kết quả final → tự động restart
+      if (pronounceWantActive && !pronounceGotResult && pronounceRetryCount < PRONOUNCE_MAX_RETRY) {
+        pronounceRetryCount++;
+        console.log(`Auto-restart pronounceRec lần ${pronounceRetryCount}/${PRONOUNCE_MAX_RETRY}`);
+        updatePronounceStatus(`Chưa nghe rõ, đang thử lại... (${pronounceRetryCount}/${PRONOUNCE_MAX_RETRY})`);
+        setTimeout(() => {
+          if (pronounceWantActive && !pronounceGotResult) {
+            try {
+              pronounceRec.start();
+            } catch (e) {
+              console.error('Auto-restart failed:', e);
+              pronounceWantActive = false;
+              updatePronounceStatus('Không nhận được giọng nói. Hãy bấm Mic và nói to hơn.');
+            }
+          }
+        }, 400);
+        return; // Không reset UI vì sẽ restart
+      }
+
+      // Nếu hết retry mà vẫn chưa có kết quả → thông báo rõ ràng
+      if (pronounceWantActive && !pronounceGotResult) {
+        pronounceWantActive = false;
+        // Nếu có accumulated text từ các lần trước → xử lý nó
+        if (pronounceAccumulatedText.trim()) {
+          processPronounceResult(pronounceAccumulatedText.trim());
+        } else {
+          updatePronounceStatus('Không nhận được giọng nói. Hãy nói to, rõ ràng và gần mic hơn.');
+        }
+      }
     };
 
     pronounceRec.onerror = (e) => {
+      console.error('Pronounce recognition error:', e.error);
+      
+      // Lỗi 'no-speech' xảy ra khi mic mở nhưng không ai nói — vẫn có thể retry
+      if (e.error === 'no-speech') {
+        // Không set isPronounceRecActive = false ở đây, để onend handler xử lý retry
+        updatePronounceStatus('Không nhận thấy giọng nói. Hãy nói to hơn...');
+        return; // Để onend xử lý auto-restart
+      }
+
+      // Các lỗi nghiêm trọng → dừng hẳn
       isPronounceRecActive = false;
+      pronounceWantActive = false;
+      if (pronounceSilenceTimer) {
+        clearInterval(pronounceSilenceTimer);
+        pronounceSilenceTimer = null;
+      }
       const btn = $('btnPronounceMic');
       if (btn) btn.classList.remove('recording');
       const wave = $('pronounceWave');
       if (wave) wave.style.display = 'none';
-      
-      console.error('Pronounce recognition error:', e);
+
       if (e.error === 'not-allowed') {
-        updatePronounceStatus('Lỗi: Không được cấp quyền truy cập Mic.');
-      } else if (e.error === 'no-speech') {
-        updatePronounceStatus('Không nhận thấy giọng nói. Hãy nói to hơn.');
+        updatePronounceStatus('Lỗi: Không được cấp quyền Mic. Vui lòng cho phép truy cập Mic trong cài đặt trình duyệt.');
       } else if (e.error === 'aborted') {
-        updatePronounceStatus('Lỗi: Bị hủy. Hãy dùng Safari/Chrome thay vì trình duyệt Zalo/Facebook.');
+        updatePronounceStatus('Lỗi: Bị hủy. Hãy mở link bằng Safari hoặc Chrome thay vì trình duyệt Zalo/Facebook.');
+      } else if (e.error === 'network') {
+        updatePronounceStatus('Lỗi mạng. Kiểm tra kết nối internet và thử lại.');
       } else {
-        updatePronounceStatus('Lỗi: ' + e.error);
+        updatePronounceStatus('Lỗi: ' + e.error + '. Hãy thử lại.');
       }
     };
 
     pronounceRec.onresult = (event) => {
-      const spokenText = event.results[0][0].transcript;
-      if (spokenText && spokenText.trim()) {
-        processPronounceResult(spokenText.trim());
+      let interimTranscript = '';
+      
+      // Tích lũy TẤT CẢ final segments (continuous mode có thể trả nhiều lần)
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          const alternatives = event.results[i];
+          let bestSpokenText = alternatives[0].transcript;
+          let highestScore = -1;
+          
+          // Duyệt qua tất cả phán đoán để tìm phương án có điểm LCS cao nhất
+          for (let a = 0; a < alternatives.length; a++) {
+            const altText = alternatives[a].transcript;
+            if (!altText || !altText.trim()) continue;
+            const diff = getLcsDiff(currentPronounceTarget, altText);
+            if (diff.score > highestScore) {
+              highestScore = diff.score;
+              bestSpokenText = altText;
+            }
+          }
+          
+          if (bestSpokenText && bestSpokenText.trim()) {
+            pronounceAccumulatedText += bestSpokenText;
+            pronounceGotResult = true;
+          }
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      // Cập nhật trạng thái interim
+      if (interimTranscript) {
+        pronounceHasInterim = true; // Đánh dấu đã nhận được interim → bắt đầu đếm silence timer
+        if (interimTranscript !== pronounceLastText) {
+          pronounceLastText = interimTranscript;
+          pronounceLastTime = Date.now();
+        }
+        updatePronounceStatus(`Đang nghe: "${interimTranscript}"...`);
+      }
+      
+      // Khi đã có kết quả final → dừng mic và xử lý
+      if (pronounceGotResult && pronounceAccumulatedText.trim()) {
+        // Dừng mic ngay — không cần chờ thêm
+        pronounceWantActive = false;
+        try { pronounceRec.stop(); } catch (e) {}
+        processPronounceResult(pronounceAccumulatedText.trim());
       }
     };
 
+    // --- Nút Mic Modal Luyện đọc (có chống xung đột bấm nhanh) ---
+    let pronounceMicDebounce = false;
     if ($('btnPronounceMic')) {
       $('btnPronounceMic').onclick = () => {
+        // Chống bấm nhanh liên tục
+        if (pronounceMicDebounce) return;
+        pronounceMicDebounce = true;
+        setTimeout(() => { pronounceMicDebounce = false; }, 500);
+
         if (isPronounceRecActive) {
-          pronounceRec.stop();
+          // Đang recording → dừng
+          pronounceWantActive = false;
+          try { pronounceRec.stop(); } catch (e) {}
         } else {
+          // Bắt đầu recording
           try {
             speakOutput(""); // Tắt loa phát âm đang đọc để tránh xung đột micro
-            // Xóa vùng kết quả cũ khi bắt đầu nói lượt mới
+            // Reset toàn bộ trạng thái
+            pronounceGotResult = false;
+            pronounceRetryCount = 0;
+            pronounceAccumulatedText = '';
+            pronounceHasInterim = false;
+            pronounceWantActive = true;
+            // Xóa vùng kết quả cũ
             const resArea = $('pronounceResultArea');
             if (resArea) resArea.style.display = 'none';
+            const aiArea = $('pronounceAiAnalysisArea');
+            if (aiArea) aiArea.style.display = 'none';
             pronounceRec.start();
           } catch (e) {
-            console.error(e);
+            console.error('Start pronounceRec error:', e);
+            pronounceWantActive = false;
+            // Nếu lỗi InvalidStateError (mic chưa kịp dừng) → retry sau 500ms
+            if (e.name === 'InvalidStateError') {
+              updatePronounceStatus('Mic đang khởi động, chờ chút...');
+              setTimeout(() => {
+                try {
+                  pronounceRec.start();
+                  pronounceWantActive = true;
+                } catch (e2) {
+                  console.error('Retry start failed:', e2);
+                  updatePronounceStatus('Không thể mở Mic. Hãy thử lại.');
+                }
+              }, 600);
+            } else {
+              updatePronounceStatus('Không thể mở Mic. Hãy kiểm tra quyền truy cập micro.');
+            }
           }
         }
       };
@@ -501,7 +711,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       },
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.7
+        temperature: 0.4
       }
     };
 
@@ -723,10 +933,16 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       throw new Error('Chưa có API Key. Vui lòng cấu hình ở tab Trò chuyện AI.');
     }
 
-    const currentModel = modelOverride || selectedModel;
+    // Với phân tích phát âm, ưu tiên dùng model Lite để phản hồi siêu tốc
+    const currentModel = modelOverride || (selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : selectedModel);
     
     // Lấy Pinyin của từ học sinh phát âm ra
-    const spokenPinyin = (window.pinyinPro && spoken && spoken.trim()) ? window.pinyinPro.pinyin(spoken.trim()) : '';
+    let spokenPinyin = '';
+    try {
+      spokenPinyin = (window.pinyinPro && typeof window.pinyinPro.pinyin === 'function' && spoken && spoken.trim()) ? window.pinyinPro.pinyin(spoken.trim()) : '';
+    } catch (e) {
+      console.warn('pinyin-pro lỗi khi phân tích spoken text:', e);
+    }
 
     const systemPrompt = `
 You are a warm, encouraging Chinese teacher. The student is practicing pronunciation.
@@ -766,7 +982,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       },
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.4
+        temperature: 0.2
       }
     };
 
@@ -871,8 +1087,14 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
   }
 
   function closePronounceModal() {
+    // Dừng recording và reset toàn bộ trạng thái
+    pronounceWantActive = false;
     if (isPronounceRecActive && pronounceRec) {
-      pronounceRec.stop();
+      try { pronounceRec.stop(); } catch (e) {}
+    }
+    if (pronounceSilenceTimer) {
+      clearInterval(pronounceSilenceTimer);
+      pronounceSilenceTimer = null;
     }
     const modal = $('pronounceModal');
     if (modal) modal.classList.remove('active');
@@ -978,9 +1200,18 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       return maxLength > 0 ? (1 - distance / maxLength) : 0;
     };
 
-    // Phân tích Pinyin từng chữ Hán
-    const tPinyins = window.pinyinPro ? window.pinyinPro.pinyin(t).split(/\s+/) : [];
-    const sPinyins = window.pinyinPro ? window.pinyinPro.pinyin(s).split(/\s+/) : [];
+    // Phân tích Pinyin từng chữ Hán (có fallback khi pinyin-pro chưa load)
+    const hasPinyinLib = !!(window.pinyinPro && typeof window.pinyinPro.pinyin === 'function');
+    let tPinyins = [];
+    let sPinyins = [];
+    try {
+      tPinyins = hasPinyinLib ? window.pinyinPro.pinyin(t).split(/\s+/) : [];
+      sPinyins = hasPinyinLib ? window.pinyinPro.pinyin(s).split(/\s+/) : [];
+    } catch (e) {
+      console.warn('pinyin-pro lỗi, fallback sang so khớp chữ thuần:', e);
+      tPinyins = [];
+      sPinyins = [];
+    }
 
     // Tạo danh sách đối tượng
     const tArr = [];
