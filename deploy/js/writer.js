@@ -225,8 +225,8 @@
     };
   }
 
-  // --- Gọi API Gemini để phân tích cấu trúc và nhận xét nét viết chữ Hán ---
-  async function callWriteAiAnalysis(char, mistakes, apiKey, model, triedModels = []) {
+  // --- Gọi API Gemini để phân tích cấu trúc và nhận xét nét viết chữ Hán (có tự động chuyển model và key) ---
+  async function callWriteAiAnalysis(char, mistakes, apiKey, model, triedModels = [], triedKeys = []) {
     const AVAILABLE_MODELS = [
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
       { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
@@ -234,6 +234,7 @@
     ];
 
     const currentModel = model || 'gemini-2.5-flash';
+    const currentKey = apiKey;
     const systemPrompt = `
 You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
 Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
@@ -250,7 +251,7 @@ Based on the character's structure and the number of mistakes:
 
 Example of expected JSON format:
 {
-  "analysis": "Chữ '你' gồm bộ Nhân đứng (亻) bên trái và chữ '尔' bên phải. Bạn hãy lưu ý viết bộ Nhân đứng trước (phẩy rồi sổ), sau đó viết chữ '尔' (phẩy, ngang móc, phẩy, cong móc và hai nét chấm). Hãy cố gắng nhớ quy tắc viết từ trái sang phải nhé!"
+  "analysis": "Chữ 'Ni' gồm bộ Nhân đứng (亻) bên trái và chữ '尔' bên phải. Bạn hãy lưu ý viết bộ Nhân đứng trước (phẩy rồi sổ), sau đó viết chữ '尔' (phẩy, ngang móc, phẩy, cong móc và hai nét chấm). Hãy cố gắng nhớ quy tắc viết từ trái sang phải nhé!"
 }
 `;
 
@@ -272,16 +273,20 @@ Example of expected JSON format:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
+        'x-goog-api-key': currentKey
       },
       body: JSON.stringify(requestBody)
     });
 
-    // Xử lý lỗi rate-limit (429) hoặc quá tải hệ thống (503/500...) — tự động chuyển sang model khác
+    // Xử lý lỗi rate-limit (429) hoặc quá tải hệ thống (503/500...)
     let isTemporaryError = false;
+    let isKeyError = false;
     let errMessage = '';
     let errStatus = '';
 
+    if (response.status === 400 || response.status === 403 || response.status === 429) {
+      isKeyError = true;
+    }
     if (response.status === 429 || response.status === 503 || response.status === 504 || response.status === 408) {
       isTemporaryError = true;
     }
@@ -293,17 +298,37 @@ Example of expected JSON format:
       
       const checkStr = (errMessage + ' ' + errStatus).toLowerCase();
       if (
-        checkStr.includes('high demand') || 
+        checkStr.includes('api key') ||
+        checkStr.includes('api_key') ||
+        checkStr.includes('key not found') ||
         checkStr.includes('quota') || 
         checkStr.includes('limit') || 
-        checkStr.includes('resource_exhausted') || 
+        checkStr.includes('resource_exhausted')
+      ) {
+        isKeyError = true;
+      }
+      if (
+        checkStr.includes('high demand') || 
         checkStr.includes('unavailable') ||
         checkStr.includes('temporarily')
       ) {
         isTemporaryError = true;
       }
 
-      if (isTemporaryError) {
+      // Xoay vòng API key trước nếu gặp lỗi liên quan đến API key hoặc quota
+      if (isKeyError) {
+        if (!triedKeys.includes(currentKey)) {
+          triedKeys.push(currentKey);
+        }
+        const nextKey = window.rotateGeminiKey(currentKey);
+        if (!triedKeys.includes(nextKey)) {
+          await new Promise(r => setTimeout(r, 1000));
+          return callWriteAiAnalysis(char, mistakes, nextKey, model, triedModels, triedKeys);
+        }
+      }
+
+      // Nếu đã thử hết các keys hoặc không phải lỗi key, thử xoay vòng model
+      if (isTemporaryError || isKeyError) {
         triedModels.push(currentModel);
         
         // Tìm model khác chưa thử
@@ -314,10 +339,10 @@ Example of expected JSON format:
           localStorage.setItem('hanzi-gemini-model', nextModel.id);
           
           await new Promise(r => setTimeout(r, 1000));
-          return callWriteAiAnalysis(char, mistakes, apiKey, nextModel.id, triedModels);
+          return callWriteAiAnalysis(char, mistakes, apiKey, nextModel.id, triedModels, triedKeys);
         }
         
-        throw new Error('Tất cả model AI đều đã hết lượt miễn phí hoặc đang quá tải. Vui lòng thử lại sau.');
+        throw new Error('Tất cả API Key và Model AI đều đã hết lượt miễn phí hoặc đang quá tải. Vui lòng thử lại sau.');
       }
       
       throw new Error(errMessage);
@@ -347,13 +372,8 @@ Example of expected JSON format:
       explainArea.style.display = 'block';
       explainArea.innerHTML = '<span style="color:var(--muted);">🔄 AI đang phân tích cấu trúc chữ và lỗi sai...</span>';
 
-      const apiKey = localStorage.getItem('hanzi-gemini-api-key') || '';
+      const apiKey = window.getGeminiKey();
       const selectedModel = localStorage.getItem('hanzi-gemini-model') || 'gemini-2.5-flash';
-
-      if (!apiKey) {
-        explainArea.textContent = '⚠️ Chưa có API Key. Vui lòng cấu hình ở tab Trò chuyện AI.';
-        return;
-      }
 
       try {
         const analysis = await callWriteAiAnalysis(currentWriteChar, lastWriteMistakes, apiKey, selectedModel);

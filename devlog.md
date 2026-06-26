@@ -9,14 +9,23 @@
 
 ### ✅ Đã hoàn thành
 
-#### 1. Phân tách lịch sử trò chuyện AI theo tài khoản thành viên
+#### 1. Tự động điền và xoay vòng API Key dự phòng (API Key Rotation)
+- **Mô tả:** Học sinh không cần lấy và nhập API key thủ công nữa. Hệ thống tự động thiết lập và lưu trữ 3 API key mặc định do giáo viên cung cấp. Nếu trong quá trình sử dụng gặp lỗi quá tải quota (429) hoặc lỗi xác thực (400/403), hệ thống sẽ tự động xoay vòng sang key tiếp theo trong danh sách dự phòng và thực hiện lại yêu cầu API ngay lập tức.
+- **Files thay đổi:**
+  - `deploy/js/core.js` — Thêm danh sách API key mặc định, hàm `getGeminiKey()`, `rotateGeminiKey()` và `isDefaultGeminiKey()`.
+  - `deploy/js/aichat.js` — Sử dụng `window.getGeminiKey()` để lấy key, nâng cấp hàm `callGeminiAPI` và `callGeminiAnalysis` để tự động phát hiện lỗi API key/quota, tự động xoay vòng và thử lại.
+  - `deploy/js/writer.js` — Tương thích hóa `callWriteAiAnalysis` để thực hiện xoay vòng API Key tương tự khi phân tích nét viết lỗi.
+  - `deploy/index.html` — Bump phiên bản JS file cache (`core.js?v=4`, `writer.js?v=3`, `aichat.js?v=21`).
+  - `deploy/sw.js` — Nâng cache version lên `hochan-v23`.
+
+#### 2. Phân tách lịch sử trò chuyện AI theo tài khoản thành viên
 - **Mô tả:** Thay vì chia sẻ chung một lịch sử chat trên trình duyệt, lịch sử trò chuyện của AI giáo viên "Tiểu Hoa" được lưu và tải độc lập theo từng tài khoản thành viên (`localStorage` key có chứa profile ID dạng `hanzi-aichat-history-{profileId}`).
 - **Giải quyết bất đồng bộ:** Sử dụng cơ chế so sánh chuỗi JSON profile thô trong `localStorage` kết hợp thăm dò (polling) định kỳ `setInterval` 500ms để tự động phát hiện và đồng bộ hóa tức thì lịch sử chat khi học sinh đăng nhập, đăng ký mới, hoặc chuyển đổi tài khoản, loại bỏ triệt để xung đột dữ liệu bất đồng bộ từ Firestore.
 - **Files thay đổi:**
   - `deploy/aichat.js` (BUMP) — Thiết lập `getCurrentHistoryKey`, `loadChatHistory`, `saveChatHistory`, `clearChatHistory`, `checkUserSession` và polling.
   - `deploy/index.html` — Bump phiên bản file `aichat.js?v=11` để bypass cache.
 
-#### 2. Tái cấu trúc phân tách tệp `app.js` khổng lồ thành 11 file độc lập
+#### 3. Tái cấu trúc phân tách tệp `app.js` khổng lồ thành 11 file độc lập
 - **Mô tả:** Phân tách tệp `app.js` dài hơn 2900 dòng thành 11 tệp tin JavaScript nhỏ gọn, tách biệt theo trách nhiệm và mảng tính năng. Đảm bảo tuân thủ nghiêm ngặt quy tắc quản lý file dự án (<600 dòng/file).
 - **Thiết kế an toàn & Chạy offline:** Sử dụng cơ chế chia sẻ Scope toàn cục thay vì ES Modules để duy trì khả năng nhấp đúp chạy offline hoàn toàn (`file://`) trên thiết bị học sinh.
 - **Files thay đổi/tạo mới:**
@@ -34,14 +43,14 @@
   - `deploy/index.html` (BUMP) — Nạp tuần tự 11 file script mới thay thế `app.js`.
   - `deploy/sw.js` (BUMP) — Cập nhật tài nguyên cache offline `ASSETS` thay `app.js` bằng 11 file mới, nâng cache lên `hochan-v9`.
   - `deploy/app.js` (XÓA) — Sao lưu thành `app.js.bak` và xóa tệp gốc.
-#### 3. Gom tất cả tệp JavaScript vào thư mục con `js/`
+#### 4. Gom tất cả tệp JavaScript vào thư mục con `js/`
 - **Mô tả:** Di chuyển toàn bộ 14 tệp tin JavaScript ứng dụng (kể cả tệp sao lưu `app.js.bak`) vào thư mục `deploy/js/` để giữ thư mục gốc sạch sẽ, bố cục gọn gàng.
 - **Duy trì hoạt động offline:** Riêng tệp `sw.js` (Service Worker) tiếp tục được giữ lại ở thư mục gốc của trang web (`deploy/sw.js`) để không vi phạm phạm vi bảo mật (Scope) của Service Worker, đảm bảo khả năng chạy offline ổn định.
 - **Files thay đổi:**
   - `deploy/index.html` — Thay đổi toàn bộ các đường dẫn nạp tệp JavaScript trỏ đến thư mục con `js/`.
   - `deploy/sw.js` — Cập nhật danh sách lưu đệm offline `ASSETS` với đường dẫn mới dạng `./js/filename.js`, thêm `./js/aichat.js` và nâng mã cache lên phiên bản `hochan-v10`.
 
-#### 4. Thống kê chi tiết tiến độ SRS của học sinh ở tab Thành viên
+#### 5. Thống kê chi tiết tiến độ SRS của học sinh ở tab Thành viên
 - **Mô tả:** Khi bấm vào tên học sinh trong tab Thành viên, hệ thống sẽ vẽ biểu đồ phân phối cấp độ SRS (Cấp 1 - 8) kèm theo thống kê chỉ số Chưa học, Đang ôn, Đã thuộc và dự báo số từ đến hạn ôn tập hôm nay cũng như ngày mai.
 - **Files thay đổi/tạo mới:**
   - `deploy/dashboard.css` (MỚI) — Chứa toàn bộ CSS định hình giao diện thẻ chỉ số, biểu đồ SRS, responsive di động và override độ tương phản cho Light Mode.

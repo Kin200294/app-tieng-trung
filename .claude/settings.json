@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.hanzii.net)",
+      "WebSearch",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type} %{size_download} bytes\\\\n\" \"https://dict.youdao.com/dictvoice?le=zh&audio=%E5%84%BF\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type} %{size_download} bytes\\\\n\" \"https://dict.youdao.com/dictvoice?le=zh&audio=%E4%BD%A0%E5%A5%BD\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type} %{size_download} bytes\\\\n\" \"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=%E5%84%BF\")",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download} bytes\\\\n\" \"https://fanyi.baidu.com/gettts?lan=zh&text=%E4%BD%A0%E5%A5%BD&spd=4&source=web\")",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download} bytes\\\\n\" \"https://fanyi.baidu.com/gettts?lan=zh&text=%E6%98%AF&spd=4&source=web\")",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download} bytes\\\\n\" \"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=%E4%BD%A0%E5%A5%BD\")",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\)\" -e \"https://translate.google.com/\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download}\\\\n\" \"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=%E4%BD%A0%E5%A5%BD\")",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download}\\\\n\" \"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=%E4%BD%A0%E5%A5%BD\")",
+      "Bash(py --version)",
+      "Bash(curl -s -o /dev/null -w \"localhost:8000 -> %{http_code}\\\\n\" \"http://localhost:8000/index.html\")",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download}\\\\n\" \"https://fanyi.sogou.com/reventondc/synthesis?text=%E4%BD%A0%E5%A5%BD&speed=1&lang=zh-CHS&from=translateweb&speaker=6\")",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download}\\\\n\" \"https://fanyi.sogou.com/reventondc/synthesis?text=%E6%98%AF&speed=1&lang=zh-CHS&from=translateweb&speaker=6\")",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type} %{size_download}\\\\n\" \"https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=zh-CN&q=%E6%98%AF\")",
+      "Bash(node -e ' *)",
+      "Bash(node --check check.js)",
+      "Bash(curl -s \"http://localhost:8000/index.html\")"
+    ]
+  }
+}

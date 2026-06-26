@@ -19,7 +19,7 @@
   ];
 
   // --- Trạng thái ---
-  let geminiKey = localStorage.getItem(API_KEY_KEY) || '';
+  let geminiKey = window.getGeminiKey();
   let selectedModel = localStorage.getItem(MODEL_KEY) || 'gemini-2.5-flash-lite';
   let chatHistory = [];
   let lastProfileString = ''; // Theo dõi chuỗi JSON profile trong localStorage để phát hiện đổi tài khoản
@@ -683,9 +683,10 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     }
   }
 
-  // --- Gọi API Gemini (có tự động chuyển model khi bị rate-limit) ---
-  async function callGeminiAPI(history, modelOverride = null, triedModels = []) {
+  // --- Gọi API Gemini (có tự động chuyển model và API key khi bị rate-limit/lỗi) ---
+  async function callGeminiAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
     const currentModel = modelOverride || selectedModel;
+    const currentKey = geminiKey;
     const contents = [];
     
     // Giới hạn số câu ngữ cảnh gửi đi (tối đa 8 tin nhắn gần nhất) để tiết kiệm token và đảm bảo tốc độ phản hồi
@@ -722,16 +723,20 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': geminiKey
+        'x-goog-api-key': currentKey
       },
       body: JSON.stringify(requestBody)
     });
 
-    // Xử lý lỗi rate-limit (429) hoặc quá tải hệ thống (503/500...) — tự động chuyển sang model khác
+    // Xử lý lỗi rate-limit (429) hoặc quá tải hệ thống (503/500...)
     let isTemporaryError = false;
+    let isKeyError = false;
     let errMessage = '';
     let errStatus = '';
 
+    if (response.status === 400 || response.status === 403 || response.status === 429) {
+      isKeyError = true;
+    }
     if (response.status === 429 || response.status === 503 || response.status === 504 || response.status === 408) {
       isTemporaryError = true;
     }
@@ -743,17 +748,39 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       
       const checkStr = (errMessage + ' ' + errStatus).toLowerCase();
       if (
-        checkStr.includes('high demand') || 
+        checkStr.includes('api key') ||
+        checkStr.includes('api_key') ||
+        checkStr.includes('key not found') ||
         checkStr.includes('quota') || 
         checkStr.includes('limit') || 
-        checkStr.includes('resource_exhausted') || 
+        checkStr.includes('resource_exhausted')
+      ) {
+        isKeyError = true;
+      }
+      if (
+        checkStr.includes('high demand') || 
         checkStr.includes('unavailable') ||
         checkStr.includes('temporarily')
       ) {
         isTemporaryError = true;
       }
 
-      if (isTemporaryError) {
+      // Xoay vòng API key trước nếu gặp lỗi liên quan đến API key hoặc quota
+      if (isKeyError) {
+        if (!triedKeys.includes(currentKey)) {
+          triedKeys.push(currentKey);
+        }
+        const nextKey = window.rotateGeminiKey(currentKey);
+        if (!triedKeys.includes(nextKey)) {
+          updateStatus(`🔑 Key lỗi/hết lượt → Đổi sang key dự phòng...`, true);
+          await new Promise(r => setTimeout(r, 1000));
+          geminiKey = nextKey;
+          return callGeminiAPI(history, modelOverride, triedModels, triedKeys);
+        }
+      }
+
+      // Nếu đã thử hết các keys hoặc không phải lỗi key, thử xoay vòng model
+      if (isTemporaryError || isKeyError) {
         triedModels.push(currentModel);
         
         // Tìm model khác chưa thử
@@ -769,10 +796,10 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           localStorage.setItem(MODEL_KEY, nextModel.id);
           if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
           
-          return callGeminiAPI(history, nextModel.id, triedModels);
+          return callGeminiAPI(history, nextModel.id, triedModels, triedKeys);
         }
         
-        throw new Error('Tất cả model AI đều đã hết lượt miễn phí hoặc đang quá tải. Vui lòng thử lại sau.');
+        throw new Error('Tất cả API Key và Model AI đều đã hết lượt miễn phí hoặc đang quá tải. Vui lòng thử lại sau.');
       }
       
       throw new Error(errMessage);
@@ -927,14 +954,14 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     }
   }
 
-  // --- Gọi API Gemini để phân tích lỗi phát âm (có tự động chuyển model) ---
-  async function callGeminiAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = []) {
+  // --- Gọi API Gemini để phân tích lỗi phát âm (có tự động chuyển model và API key) ---
+  async function callGeminiAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
     if (!geminiKey) {
       throw new Error('Chưa có API Key. Vui lòng cấu hình ở tab Trò chuyện AI.');
     }
 
-    // Với phân tích phát âm, ưu tiên dùng model Lite để phản hồi siêu tốc
     const currentModel = modelOverride || (selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : selectedModel);
+    const currentKey = geminiKey;
     
     // Lấy Pinyin của từ học sinh phát âm ra
     let spokenPinyin = '';
@@ -990,16 +1017,20 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': geminiKey
+        'x-goog-api-key': currentKey
       },
       body: JSON.stringify(requestBody)
     });
 
-    // Xử lý lỗi rate-limit (429) hoặc quá tải hệ thống (503/500...) — tự động chuyển sang model khác
+    // Xử lý lỗi rate-limit (429) hoặc quá tải hệ thống (503/500...)
     let isTemporaryError = false;
+    let isKeyError = false;
     let errMessage = '';
     let errStatus = '';
 
+    if (response.status === 400 || response.status === 403 || response.status === 429) {
+      isKeyError = true;
+    }
     if (response.status === 429 || response.status === 503 || response.status === 504 || response.status === 408) {
       isTemporaryError = true;
     }
@@ -1011,17 +1042,38 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       
       const checkStr = (errMessage + ' ' + errStatus).toLowerCase();
       if (
-        checkStr.includes('high demand') || 
+        checkStr.includes('api key') ||
+        checkStr.includes('api_key') ||
+        checkStr.includes('key not found') ||
         checkStr.includes('quota') || 
         checkStr.includes('limit') || 
-        checkStr.includes('resource_exhausted') || 
+        checkStr.includes('resource_exhausted')
+      ) {
+        isKeyError = true;
+      }
+      if (
+        checkStr.includes('high demand') || 
         checkStr.includes('unavailable') ||
         checkStr.includes('temporarily')
       ) {
         isTemporaryError = true;
       }
 
-      if (isTemporaryError) {
+      // Xoay vòng API key trước nếu gặp lỗi liên quan đến API key hoặc quota
+      if (isKeyError) {
+        if (!triedKeys.includes(currentKey)) {
+          triedKeys.push(currentKey);
+        }
+        const nextKey = window.rotateGeminiKey(currentKey);
+        if (!triedKeys.includes(nextKey)) {
+          await new Promise(r => setTimeout(r, 1000));
+          geminiKey = nextKey;
+          return callGeminiAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+        }
+      }
+
+      // Nếu đã thử hết các keys hoặc không phải lỗi key, thử xoay vòng model
+      if (isTemporaryError || isKeyError) {
         triedModels.push(currentModel);
         
         // Tìm model khác chưa thử
@@ -1034,10 +1086,10 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
           if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
           
           await new Promise(r => setTimeout(r, 1000));
-          return callGeminiAnalysis(target, pinyin, spoken, nextModel.id, triedModels);
+          return callGeminiAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
         }
         
-        throw new Error('Tất cả model AI đều đã hết lượt miễn phí hoặc đang quá tải. Vui lòng thử lại sau.');
+        throw new Error('Tất cả API Key và Model AI đều đã hết lượt miễn phí hoặc đang quá tải. Vui lòng thử lại sau.');
       }
       
       throw new Error(errMessage);

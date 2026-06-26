@@ -1,0 +1,133 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>Hướng dẫn sử dụng — Học Chữ Hán</title>
+<style>
+  body { font-family: "Times New Roman", serif; font-size: 13pt; line-height: 1.5; color: #1a1a1a; }
+  h1 { font-size: 22pt; color: #8c6315; text-align: center; margin-bottom: 2pt; }
+  .sub { text-align: center; color: #666; font-style: italic; margin-top: 0; }
+  h2 { font-size: 16pt; color: #b9892b; border-bottom: 2px solid #d4af37; padding-bottom: 3pt; margin-top: 22pt; }
+  h3 { font-size: 13.5pt; color: #6b4910; margin-bottom: 4pt; }
+  ul, ol { margin-top: 4pt; }
+  li { margin-bottom: 4pt; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+  td, th { border: 1px solid #c9b27a; padding: 6pt 8pt; vertical-align: top; }
+  th { background: #f3e6c4; color: #6b4910; text-align: left; }
+  .note { background: #fbf4e0; border-left: 4px solid #d4af37; padding: 8pt 12pt; margin: 10pt 0; }
+  .tip { background: #eaf6ee; border-left: 4px solid #3aa55f; padding: 8pt 12pt; margin: 10pt 0; }
+  .warn { background: #fdecea; border-left: 4px solid #e0573a; padding: 8pt 12pt; margin: 10pt 0; }
+  code { background: #eee; padding: 1pt 4pt; font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<h1>HƯỚNG DẪN SỬ DỤNG<br>Ứng dụng học chữ Hán "Học Chữ Hán Cùng"</h1>
+<p class="sub">Tài liệu dành cho Giáo viên &amp; Học sinh</p>
+
+<h2>1. Giới thiệu chung</h2>
+<p>"Học Chữ Hán Cùng" là ứng dụng web giúp học sinh học từ vựng tiếng Trung qua thẻ lật, kiểm tra, trò chơi ghép thẻ và bài khóa. Giáo viên soạn từ vựng/bài học một lần, mọi học sinh sẽ nhận được tự động; tiến độ học của mỗi học sinh được lưu riêng và đồng bộ trên đám mây.</p>
+<ul>
+  <li><b>Hai vai trò:</b> Học sinh (học &amp; luyện tập) và Giáo viên (soạn nội dung, theo dõi lớp).</li>
+  <li><b>Dùng được trên:</b> máy tính, điện thoại, máy tính bảng. Có thể "Thêm vào màn hình chính" để dùng như một ứng dụng.</li>
+  <li><b>Cần internet</b> để đồng bộ; khi mất mạng vẫn học được phần đã tải.</li>
+</ul>
+
+<h2>2. Bắt đầu — Đăng nhập</h2>
+<p>Lần đầu mở app, học sinh nhập <b>Họ và tên</b> + <b>Ngày sinh</b> (chọn Ngày / Tháng / Năm).</p>
+<div class="note">
+  <b>Quan trọng:</b> Danh tính = <b>Họ tên + Ngày sinh</b>. Đăng nhập đúng tên và ngày sinh giống nhau ở bất kỳ máy nào (máy tính, điện thoại) sẽ <b>lấy lại được điểm và tiến độ</b> của mình. Hãy nhập <b>chính xác và thống nhất</b> ngày sinh trên mọi thiết bị.
+</div>
+<p>Nút <b>👤 (Tài khoản)</b> ở góc trên cho phép xem tài khoản hiện tại hoặc <b>Đăng nhập / đổi tài khoản</b> khác (tiện khi dùng chung máy).</p>
+
+<h2>3. Hướng dẫn cho HỌC SINH</h2>
+
+<h3>3.1. Trang Học (🎴)</h3>
+<ul>
+  <li>Bấm vào thẻ để <b>lật ra</b> xem pinyin + nghĩa; app sẽ <b>tự đọc</b> chữ Hán.</li>
+  <li>Bấm biểu tượng <b>loa 🔊</b> trên thẻ để nghe lại.</li>
+  <li>Bấm <b>cờ ⚑</b> trên thẻ để đánh dấu <b>chữ khó</b> cần ôn — chữ này hiện ở mục "⚑ Chữ lưu ý" và báo cho giáo viên.</li>
+  <li>Thanh trên cùng: chọn <b>Buổi học</b>, <b>Mặt trước</b> (Chữ Hán / Nghĩa), <b>Số cột</b>; có nút <b>Xáo trộn</b>, <b>Úp lại hết</b>, lọc <b>Chữ lưu ý</b>.</li>
+  <li>Phía trên hiển thị huy hiệu <b>"X chữ cần ôn hôm nay"</b> và <b>chuỗi ngày học liên tiếp 🔥</b>.</li>
+</ul>
+
+<h3>3.2. Trang Kiểm tra (📝)</h3>
+<ul>
+  <li>Chọn <b>Buổi học</b>, <b>Kiểu</b> (Lật thẻ tự đánh giá / Trắc nghiệm A-B-C-D), <b>Hỏi bằng</b>, rồi bấm <b>Bắt đầu</b>.</li>
+  <li>Đang làm bài có nút <b>Dừng lại</b> và <b>Làm lại</b> (đều hỏi xác nhận).</li>
+  <li><b>Lật thẻ:</b> tự đánh giá "Thuộc" / "Chưa thuộc".</li>
+  <li><b>Trắc nghiệm:</b> chọn đáp án pinyin; chọn xong mới đọc chữ và hiện nút nghe lại.</li>
+  <li>Khi chọn <b>"Chưa thuộc"</b> (lật thẻ) hoặc <b>trả lời sai</b> (trắc nghiệm), chữ đó <b>tự được gắn cờ ⚑ chữ khó</b>. Trả lời <b>đúng 2 lần liên tiếp</b> thì cờ tự bỏ.</li>
+  <li>Cuối bài hiện điểm, phần trăm và danh sách chữ cần ôn lại.</li>
+</ul>
+
+<h3>3.3. Trang Ghép thẻ (🎮)</h3>
+<ul>
+  <li>Chọn Buổi học và Số cặp, bấm <b>Bắt đầu</b>. Ghép chữ Hán với pinyin/nghĩa tương ứng.</li>
+  <li>Có nút <b>Tạm dừng</b>, <b>Làm lại</b>, <b>Kết thúc</b>. Ghép sai bị cộng thời gian phạt.</li>
+  <li>Hoàn thành sẽ báo thời gian, so với <b>kỷ lục cá nhân</b> theo số cặp và lên <b>bảng xếp hạng chung</b> của lớp.</li>
+</ul>
+
+<h3>3.4. Trang Bài khóa (📖)</h3>
+<ul>
+  <li>Hai dạng: <b>Ghép câu hoàn chỉnh</b> và <b>Trả lời câu hỏi</b>. Chọn loại ở ô "Loại".</li>
+  <li>Bấm từng từ để ghép thành câu; bấm <b>Câu khác</b> để đổi bài.</li>
+</ul>
+
+<h3>3.5. Tiện ích</h3>
+<ul>
+  <li>Nút <b>⚙️</b> (trên điện thoại) gom các nút: <b>🌙 đổi tông sáng/tối</b>, <b>🔊 bật/tắt tiếng</b>, <b>👤 tài khoản</b>.</li>
+  <li><b>Thêm vào màn hình chính:</b> mở trình duyệt → menu Chia sẻ → "Thêm vào màn hình chính" để dùng như app, biểu tượng là logo của lớp.</li>
+</ul>
+
+<h2>4. Hướng dẫn cho GIÁO VIÊN</h2>
+<p>Bấm nút <b>👨‍🏫 Giáo viên</b> ở đầu trang và nhập <b>mật khẩu giáo viên</b> (mặc định do quản trị cấp). Sau khi vào sẽ thấy thêm các tab quản lý.</p>
+
+<h3>4.1. Thêm chữ (✏️)</h3>
+<ul>
+  <li><b>Thêm từng chữ:</b> nhập Chữ Hán, Pinyin, Nghĩa, Câu ví dụ (không bắt buộc), chọn Buổi học → "Thêm vào danh sách".</li>
+  <li><b>Nhập từ file Excel:</b> bấm <b>Tải mẫu Excel</b> để có file mẫu, điền các cột <b>Chữ · Pinyin · Nghĩa · Buổi học · Câu ví dụ</b>, lưu ở định dạng <b>CSV UTF-8</b>, rồi bấm <b>Tải file lên</b>.</li>
+  <li>Có thể tìm kiếm, sửa, xóa từng chữ trong "Danh sách chữ".</li>
+</ul>
+<div class="tip"><b>Mẹo pinyin:</b> nên gõ pinyin <b>có dấu cách giữa các âm tiết</b> (vd <code>nán péng you</code>) để dễ đọc và hiển thị đẹp.</div>
+
+<h3>4.2. Quản lý bài (📁)</h3>
+<ul>
+  <li>Tạo / đổi tên / xóa các <b>buổi học</b>; có nút <b>Đổi mật khẩu</b> giáo viên.</li>
+</ul>
+
+<h3>4.3. Soạn bài khóa (📖)</h3>
+<ul>
+  <li>Tạo bài "Ghép câu" hoặc "Trả lời câu hỏi"; nhập câu chữ Hán (các từ cách nhau bằng dấu cách) và nghĩa/gợi ý.</li>
+</ul>
+
+<h3>4.4. Chữ khó (📊)</h3>
+<ul>
+  <li>Tổng hợp các <b>chữ được học sinh gắn cờ ⚑</b> nhiều nhất. Bấm vào một chữ để <b>xổ xuống</b> xem pinyin, nghĩa và <b>tên các học sinh</b> đã gắn cờ chữ đó.</li>
+  <li>Nút <b>Xóa dấu khó</b>: gỡ toàn bộ cờ ⚑ của cả lớp (không ảnh hưởng phần "đã thuộc").</li>
+</ul>
+
+<h3>4.5. Thành viên (👥)</h3>
+<ul>
+  <li>Xem danh sách học sinh, điểm, tiến độ; <b>Top 3 điểm</b> được làm nổi bật.</li>
+  <li>Bấm vào một học sinh để xem <b>lịch sử Kiểm tra &amp; Ghép thẻ</b>; có nút xóa lịch sử hoặc xóa thành viên (dùng để dọn tài khoản trùng).</li>
+  <li>Nút <b>Xuất điểm (CSV)</b> để lưu bảng điểm lớp, mở bằng Excel.</li>
+</ul>
+
+<h3>4.6. Trang Quản trị (Admin)</h3>
+<p>Mở file <code>admin.html</code> (cùng địa chỉ web, thêm <code>/admin.html</code>) và nhập mật khẩu admin để: đổi mật khẩu giáo viên, xem/xóa thành viên, đặt lại điểm, xóa toàn bộ từ vựng chung.</p>
+
+<h2>5. Câu hỏi thường gặp</h2>
+<table>
+  <tr><th>Tình huống</th><th>Cách xử lý</th></tr>
+  <tr><td>Đổi máy/điện thoại nhưng mất tiến độ</td><td>Đăng nhập lại đúng <b>họ tên + ngày sinh</b> giống hệt lần trước.</td></tr>
+  <tr><td>Bị tạo 2 tài khoản trùng tên</td><td>Thường do nhập <b>ngày sinh khác nhau</b>. Giáo viên vào Thành viên xóa bản sai; đăng nhập lại với cùng một ngày sinh.</td></tr>
+  <tr><td>Sửa nội dung mà không thấy đổi</td><td>Tải lại trang (hard refresh) hoặc đóng/mở lại app vài giây để cập nhật.</td></tr>
+  <tr><td>Không nghe được tiếng</td><td>Kiểm tra nút 🔊 đã bật và thiết bị có mạng.</td></tr>
+</table>
+
+<div class="warn"><b>Lưu ý cho giáo viên:</b> Từ vựng &amp; bài học là <b>chung cho cả lớp</b> — sửa/xóa sẽ ảnh hưởng mọi học sinh. Nên thận trọng và dùng "Xuất ra file" để sao lưu định kỳ.</div>
+
+<p style="text-align:center; color:#8c6315; margin-top:24pt;"><b>Chúc thầy cô và các em học tốt! 段文强 ✦</b></p>
+
+</body>
+</html>
