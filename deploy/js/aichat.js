@@ -628,6 +628,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
 
     // 2. Gọi AI suy nghĩ
     isThinking = true;
+    renderChatMessages();
     updateStatus('AI đang suy nghĩ...', true);
     
     // Tự động cuộn xuống khi đang suy nghĩ
@@ -680,6 +681,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       updateStatus('Có lỗi xảy ra.');
     } finally {
       isThinking = false;
+      renderChatMessages();
     }
   }
 
@@ -876,6 +878,21 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         </div>
       `;
     });
+
+    if (isThinking) {
+      html += `
+        <div class="chat-row ai">
+          <div class="chat-avatar">👩‍🏫</div>
+          <div class="chat-bubble thinking-bubble">
+            <div class="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     stage.innerHTML = html;
 

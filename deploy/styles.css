@@ -25,7 +25,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    font-family: "Outfit", "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     color: var(--text);
     padding: calc(28px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
              calc(48px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));

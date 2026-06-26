@@ -832,3 +832,60 @@ body.light .char-result.partial {
     font-size: 0.85rem !important;
   }
 }
+
+/* --- Hiệu ứng AI đang nghĩ (Typing Indicator) --- */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background-color: var(--gold-1);
+  border-radius: 50%;
+  display: inline-block;
+  animation: bounceDot 1.4s infinite ease-in-out both;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounceDot {
+  0%, 80%, 100% {
+    transform: scale(0.3);
+  }
+  40% {
+    transform: scale(1.0);
+  }
+}
+
+.chat-bubble.thinking-bubble {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.1);
+  animation: pulseThinking 2s infinite ease-in-out;
+  padding: 8px 16px;
+}
+
+@keyframes pulseThinking {
+  0% {
+    border-color: rgba(212, 175, 55, 0.2);
+    box-shadow: 0 0 12px rgba(212, 175, 55, 0.1);
+  }
+  50% {
+    border-color: rgba(212, 175, 55, 0.5);
+    box-shadow: 0 0 18px rgba(212, 175, 55, 0.25);
+  }
+  100% {
+    border-color: rgba(212, 175, 55, 0.2);
+    box-shadow: 0 0 12px rgba(212, 175, 55, 0.1);
+  }
+}
