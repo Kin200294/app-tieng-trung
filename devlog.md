@@ -95,7 +95,21 @@
   - Tự động thay đổi model sang `gemini-2.5-flash-lite` và lấy đúng key Gemini của hệ thống nếu rơi vào kịch bản dự phòng.
   - Tăng mã cache-busting trong `index.html` và Service Worker `sw.js` lên `hochan-v30`.
 
-#### 2. Khắc phục ReferenceError khi tách file script chạy tuần tự
+#### 2. Tích hợp DeepSeek Miễn phí qua cổng OpenRouter để tránh lỗi hết token (Insufficient Balance)
+- **Mô tả:** Do cổng API DeepSeek trực tiếp yêu cầu tài khoản trả phí phải nạp trước số dư (tối thiểu 2 USD) và tài khoản số dư 0 USD sẽ báo lỗi `Insufficient Balance`, hệ thống đã tích hợp các mô hình DeepSeek miễn phí thông qua OpenRouter để cho phép người dùng chạy DeepSeek hoàn toàn miễn phí bằng API key OpenRouter cá nhân.
+- **Cách sửa:**
+  - Thêm model `deepseek/deepseek-chat:free` (DeepSeek V3 Free) và `deepseek/deepseek-r1:free` (DeepSeek R1 Free) vào danh sách model khả dụng của cổng OpenRouter trong cả `aichat.js` và `writer.js`.
+  - Đổi nhãn cổng kết nối trong `index.html` thành `OpenRouter (Llama, Qwen & DeepSeek Miễn phí)`.
+  - Cập nhật model mặc định khi chọn OpenRouter sang `deepseek/deepseek-chat:free`.
+  - Tăng mã cache-busting trong `index.html` cho `aichat.js` và `writer.js` lên `v=27` và `v=7`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v31`.
+- **Files thay đổi:**
+  - `deploy/index.html` — Đổi nhãn kết nối và bump version script.
+  - `deploy/js/aichat.js` — Thêm các tùy chọn model DeepSeek Free và cập nhật dropdown OpenRouter.
+  - `deploy/js/writer.js` — Thêm các tùy chọn model DeepSeek Free vào OpenRouter block.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v31`.
+
+#### 3. Khắc phục ReferenceError khi tách file script chạy tuần tự
 - **Mô tả:** Sửa lỗi `ReferenceError: addPoints is not defined` tại `core.js` và lỗi liên đới `Cannot access 'TONE_MAP' before initialization` tại `toneOf` khiến ứng dụng bị trắng trang hoặc không hiển thị từ vựng (hiển thị 0 chữ) khi chạy qua Live Server hoặc cổng cục bộ.
 - **Cách sửa:**
   - Chuyển `addPoints` thành thuộc tính `null` ban đầu trong `window.HanziUI` ở `core.js`.
@@ -108,7 +122,7 @@
   - `deploy/index.html` — Bump phiên bản file `core.js?v=2` và `auth.js?v=2`.
   - `deploy/sw.js` — Nâng mã cache lên phiên bản `hochan-v11`.
 
-#### 2. Khắc phục lỗi AI quá tải (Spikes in demand / ResourceExhausted)
+#### 4. Khắc phục lỗi AI quá tải (Spikes in demand / ResourceExhausted)
 - **Mô tả:** Khi model AI mặc định gặp lỗi quá tải của Google (trả về status 503 hoặc tin nhắn báo quá tải "high demand"), hệ thống không tự động chuyển đổi sang model dự phòng (auto-fallback), dẫn đến hiển thị thông báo lỗi thô cho người dùng. Đồng thời, API phân tích giọng nói (`callGeminiAnalysis`) chưa được tích hợp cơ chế tự động đổi model.
 - **Cách sửa:**
   - Cải tiến hàm `callGeminiAPI` trong `aichat.js` để phát hiện lỗi quá tải từ cả mã trạng thái HTTP (429, 503, 504, 408) lẫn chuỗi ký tự lỗi JSON (như "high demand", "resource_exhausted", "unavailable", "temporarily"). Khi phát hiện các lỗi này, hệ thống sẽ lập tức chuyển đổi sang model khác trong danh sách (Gemini 2.5 Flash Lite / Gemini 2.0 Flash Lite) và ghi nhớ lựa chọn mới vào `localStorage`.
@@ -119,7 +133,7 @@
   - `deploy/index.html` — Bump phiên bản `aichat.js?v=12`.
   - `deploy/sw.js` — Cập nhật cache lên `hochan-v12`.
 
-#### 3. Tích hợp tính năng Giáo viên AI nhận xét nét viết chữ Hán
+#### 5. Tích hợp tính năng Giáo viên AI nhận xét nét viết chữ Hán
 - **Mô tả:** Tích hợp Trí tuệ Nhân tạo (Gemini API) vào bảng Tập viết chữ Hán (`#writeModal`). Khi học sinh viết xong một chữ Hán, hệ thống sẽ mở ra nút bấm cho phép nhờ AI Giáo viên nhận xét chi tiết về thứ tự nét, hướng nét, bộ thủ và hình dáng chữ Hán bằng tiếng Việt.
 - **Cách làm:**
   - Bổ sung các thẻ HTML (`#writeAiAnalysisArea`, `#btnWriteAiExplain`, `#writeAiExplanation`) trong modal `#writeModal` ở `index.html`.
