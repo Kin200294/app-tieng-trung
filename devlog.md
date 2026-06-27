@@ -10,13 +10,13 @@
 ### ✅ Đã hoàn thành
 
 #### 1. Nâng cấp thiết kế Typography, hoạt họa suy nghĩ & Cố định chiều cao khung Chat để cuộn tin nhắn
-- **Mô tả:** Tích hợp font chữ sans-serif cao cấp `Outfit` và `Inter` từ Google Fonts giúp giao diện hiện đại hơn. Tích hợp bong bóng hoạt họa 3 dấu chấm nhấp nhô (Typing Indicator) kèm hiệu ứng phát sáng nhẹ nhàng khi AI đang nghĩ. Đặc biệt, loại bỏ thuộc tính `flex: 1` và cố định chiều cao `.aichat-window` ở mức `520px` trên desktop, buộc danh sách tin nhắn `.aichat-messages` tự động cuộn dọc (scroll-y) bên trong khung thay vì kéo dài trang web vô tận.
+- **Mô tả:** Tích hợp font chữ sans-serif cao cấp `Outfit` và `Inter` từ Google Fonts giúp giao diện hiện đại hơn. Tích hợp bong bóng hoạt họa 3 dấu chấm nhấp nhô (Typing Indicator) kèm hiệu ứng phát sáng nhẹ nhàng khi AI đang nghĩ. Đặc biệt, loại bỏ thuộc tính `flex: 1` và cố định chiều cao `.aichat-window` ở mức `520px` trên desktop, buộc danh sách tin nhắn `.aichat-messages` tự động cuộn dọc (scroll-y) bên trong khung thay vì kéo dài trang web vô tận. Đồng thời nâng cấp font chữ cho chữ Hán trong bong bóng chat bằng Google Font `Noto Sans SC` và font hệ thống hiện đại (`PingFang SC`, `Microsoft YaHei`) thay cho font Serif/StoryScript truyền thống để hiển thị trơn tru, mịn đẹp.
 - **Files thay đổi:**
-  - `deploy/index.html` — Tải font `Outfit` và `Inter` từ Google Fonts, bump version cache CSS/JS.
+  - `deploy/index.html` — Tải font `Outfit`, `Inter` và `Noto Sans SC` từ Google Fonts, bump version cache CSS/JS.
   - `deploy/styles.css` — Thiết lập font-family mặc định cho body thành `Outfit` và `Inter`.
-  - `deploy/aichat.css` — Thiết lập chiều cao cố định `520px` cho `.aichat-window` trên desktop, bổ sung CSS hoạt họa.
+  - `deploy/aichat.css` — Thiết lập chiều cao cố định `520px` cho `.aichat-window` trên desktop, bổ sung CSS hoạt họa. Thay đổi font-family của `.bubble-hanzi` sang các font sans-serif tiếng Trung hiện đại.
   - `deploy/js/aichat.js` — Thêm logic tự động chèn/xóa bong bóng thinking khi `isThinking` thay đổi trạng thái.
-  - `deploy/sw.js` — Nâng cache version lên `hochan-v26`.
+  - `deploy/sw.js` — Nâng cache version lên `hochan-v27`.
 
 #### 2. Tự động điền và xoay vòng API Key dự phòng (API Key Rotation)
 - **Mô tả:** Học sinh không cần lấy và nhập API key thủ công nữa. Hệ thống tự động thiết lập và lưu trữ 3 API key mặc định do giáo viên cung cấp. Nếu người dùng để trống phần API Key, hệ thống tự động tải key mặc định và kích hoạt cơ chế xoay vòng mà không đưa ra cảnh báo làm phiền người dùng. Nếu trong quá trình sử dụng gặp lỗi quá tải quota (429) hoặc lỗi xác thực (400/403), hệ thống sẽ tự động xoay vòng sang key tiếp theo trong danh sách dự phòng và thực hiện lại yêu cầu API ngay lập tức.

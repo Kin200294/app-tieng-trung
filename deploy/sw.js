@@ -1,6 +1,6 @@
 // Service Worker — ưu tiên mạng (luôn lấy bản mới khi có internet),
 // chỉ dùng bản lưu đệm khi offline. Tránh tình trạng "sửa mà không thấy đổi".
-const CACHE = 'hochan-v26';
+const CACHE = 'hochan-v27';
 const ASSETS = [
   './', 
   './index.html', 
