@@ -878,34 +878,13 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   // --- Gọi API Gemini (có tự động chuyển model và API key khi bị rate-limit/lỗi) ---
   async function callGeminiAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
     if (aiProvider === 'openrouter') {
-      try {
-        return await callOpenRouterAPI(history, modelOverride, triedModels, triedKeys);
-      } catch (err) {
-        console.warn('OpenRouter lỗi, chuyển sang Gemini dự phòng:', err);
-        updateStatus('Cổng OpenRouter bận/lỗi → Đang tự động dùng Gemini dự phòng...', true);
-        await new Promise(r => setTimeout(r, 1500));
-        // Cho phép chạy tiếp xuống Gemini
-      }
+      return await callOpenRouterAPI(history, modelOverride, triedModels, triedKeys);
     }
     if (aiProvider === 'deepseek') {
-      try {
-        return await callDeepSeekAPI(history, modelOverride, triedModels, triedKeys);
-      } catch (err) {
-        console.warn('DeepSeek lỗi, chuyển sang Gemini dự phòng:', err);
-        updateStatus('DeepSeek lỗi (Hết số dư/bận) → Đang dùng Gemini dự phòng...', true);
-        await new Promise(r => setTimeout(r, 1500));
-        // Cho phép chạy tiếp xuống Gemini
-      }
+      return await callDeepSeekAPI(history, modelOverride, triedModels, triedKeys);
     }
     if (aiProvider === 'siliconflow') {
-      try {
-        return await callSiliconFlowAPI(history, modelOverride, triedModels, triedKeys);
-      } catch (err) {
-        console.warn('SiliconFlow lỗi, chuyển sang Gemini dự phòng:', err);
-        updateStatus('SiliconFlow bận/lỗi → Đang tự động dùng Gemini dự phòng...', true);
-        await new Promise(r => setTimeout(r, 1500));
-        // Cho phép chạy tiếp xuống Gemini
-      }
+      return await callSiliconFlowAPI(history, modelOverride, triedModels, triedKeys);
     }
     let currentModel = modelOverride || selectedModel;
     if (aiProvider !== 'gemini' || !currentModel.startsWith('gemini')) {
@@ -1054,7 +1033,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
 
   // --- Gọi API OpenRouter ---
   async function callOpenRouterAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
-    const currentModel = modelOverride || localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen-2-7b-instruct:free';
+    const currentModel = modelOverride || localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen3-coder:free';
     const currentKey = openrouterKey || window.getOpenRouterKey();
 
     const maxContext = 8;
@@ -1075,26 +1054,48 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
 
     const url = 'https://openrouter.ai/api/v1/chat/completions';
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + currentKey,
-        'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
-        'X-Title': 'Hoc Chu Han App'
-      },
-      body: JSON.stringify({
-        model: currentModel,
-        messages: messages,
-        temperature: 0.4
-      })
-    });
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentKey,
+          'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
+          'X-Title': 'Hoc Chu Han App'
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: messages,
+          temperature: 0.4
+        })
+      });
 
-    if (!response.ok) {
-      const errInfo = await response.json().catch(() => ({}));
-      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-      
-      // Thử xoay vòng sang model khác của OpenRouter
+      if (!response.ok) {
+        const errInfo = await response.json().catch(() => ({}));
+        const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+        throw new Error(errMessage);
+      }
+
+      const data = await response.json();
+      try {
+        const textOutput = data.choices[0].message.content;
+        return JSON.parse(textOutput.trim());
+      } catch (e) {
+        console.warn('Lỗi phân tích JSON từ OpenRouter, thử trích xuất thủ công:', e);
+        const textOutput = data.choices[0].message.content;
+        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0].trim());
+        }
+        return {
+          hanzi: textOutput,
+          pinyin: '',
+          vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
+        };
+      }
+    } catch (err) {
+      console.warn(`Lỗi khi gọi model ${currentModel} trên OpenRouter:`, err);
       triedModels.push(currentModel);
       const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
       if (nextModel) {
@@ -1107,25 +1108,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         
         return callOpenRouterAPI(history, nextModel.id, triedModels, triedKeys);
       }
-      throw new Error(errMessage);
-    }
-
-    const data = await response.json();
-    try {
-      const textOutput = data.choices[0].message.content;
-      return JSON.parse(textOutput.trim());
-    } catch (e) {
-      console.warn('Lỗi phân tích JSON từ OpenRouter, thử trích xuất thủ công:', e);
-      const textOutput = data.choices[0].message.content;
-      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0].trim());
-      }
-      return {
-        hanzi: textOutput,
-        pinyin: '',
-        vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
-      };
+      throw new Error(`OpenRouter lỗi: ${err.message}`);
     }
   }
 
@@ -1152,41 +1135,59 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
 
     const url = 'https://api.siliconflow.cn/v1/chat/completions';
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + currentKey
-      },
-      body: JSON.stringify({
-        model: currentModel,
-        messages: messages,
-        temperature: 0.4
-      })
-    });
-
-    if (!response.ok) {
-      const errInfo = await response.json().catch(() => ({}));
-      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-      throw new Error(errMessage);
-    }
-
-    const data = await response.json();
+    
     try {
-      const textOutput = data.choices[0].message.content;
-      return JSON.parse(textOutput.trim());
-    } catch (e) {
-      console.warn('Lỗi phân tích JSON từ SiliconFlow, thử trích xuất thủ công:', e);
-      const textOutput = data.choices[0].message.content;
-      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0].trim());
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentKey
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: messages,
+          temperature: 0.4
+        })
+      });
+
+      if (!response.ok) {
+        const errInfo = await response.json().catch(() => ({}));
+        const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+        throw new Error(errMessage);
       }
-      return {
-        hanzi: textOutput,
-        pinyin: '',
-        vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
-      };
+
+      const data = await response.json();
+      try {
+        const textOutput = data.choices[0].message.content;
+        return JSON.parse(textOutput.trim());
+      } catch (e) {
+        console.warn('Lỗi phân tích JSON từ SiliconFlow, thử trích xuất thủ công:', e);
+        const textOutput = data.choices[0].message.content;
+        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0].trim());
+        }
+        return {
+          hanzi: textOutput,
+          pinyin: '',
+          vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
+        };
+      }
+    } catch (err) {
+      console.warn(`Lỗi khi gọi model ${currentModel} trên SiliconFlow:`, err);
+      triedModels.push(currentModel);
+      const nextModel = SILICONFLOW_MODELS.find(m => !triedModels.includes(m.id));
+      if (nextModel) {
+        updateStatus(`SiliconFlow model bận → Chuyển sang ${nextModel.name}...`, true);
+        await new Promise(r => setTimeout(r, 1000));
+        
+        selectedModel = nextModel.id;
+        localStorage.setItem(SILICONFLOW_MODEL_KEY, nextModel.id);
+        if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
+        
+        return callSiliconFlowAPI(history, nextModel.id, triedModels, triedKeys);
+      }
+      throw new Error(`SiliconFlow lỗi: ${err.message}`);
     }
   }
 
@@ -1396,28 +1397,13 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   // --- Gọi API Gemini để phân tích lỗi phát âm (có tự động chuyển model và API key) ---
   async function callGeminiAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
     if (aiProvider === 'openrouter') {
-      try {
-        return await callOpenRouterAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
-      } catch (err) {
-        console.warn('OpenRouter phân tích lỗi, chuyển sang Gemini dự phòng:', err);
-        // Cho phép chạy tiếp xuống Gemini
-      }
+      return await callOpenRouterAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
     }
     if (aiProvider === 'deepseek') {
-      try {
-        return await callDeepSeekAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
-      } catch (err) {
-        console.warn('DeepSeek phân tích lỗi, chuyển sang Gemini dự phòng:', err);
-        // Cho phép chạy tiếp xuống Gemini
-      }
+      return await callDeepSeekAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
     }
     if (aiProvider === 'siliconflow') {
-      try {
-        return await callSiliconFlowAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
-      } catch (err) {
-        console.warn('SiliconFlow phân tích lỗi, chuyển sang Gemini dự phòng:', err);
-        // Cho phép chạy tiếp xuống Gemini
-      }
+      return await callSiliconFlowAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
     }
     if (!geminiKey) {
       geminiKey = window.getGeminiKey();
@@ -1579,7 +1565,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
 
   // --- Gọi API OpenRouter để phân tích lỗi phát âm ---
   async function callOpenRouterAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
-    const currentModel = modelOverride || localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen-2-7b-instruct:free';
+    const currentModel = modelOverride || localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen3-coder:free';
     const currentKey = openrouterKey || window.getOpenRouterKey();
     
     // Lấy Pinyin của từ học sinh phát âm ra
@@ -1621,28 +1607,47 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
     const prompt = `Correct Chinese: "${target}" (Pinyin: "${pinyin}")\nStudent pronounced: "${spoken}"${spokenPinyin ? ` (Recognized Pinyin: "${spokenPinyin}")` : ''}`;
     const url = 'https://openrouter.ai/api/v1/chat/completions';
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + currentKey,
-        'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
-        'X-Title': 'Hoc Chu Han App'
-      },
-      body: JSON.stringify({
-        model: currentModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.2
-      })
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentKey,
+          'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
+          'X-Title': 'Hoc Chu Han App'
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.2
+        })
+      });
 
-    if (!response.ok) {
-      const errInfo = await response.json().catch(() => ({}));
-      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-      
+      if (!response.ok) {
+        const errInfo = await response.json().catch(() => ({}));
+        const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+        throw new Error(errMessage);
+      }
+
+      const data = await response.json();
+      try {
+        const textOutput = data.choices[0].message.content;
+        const parsed = JSON.parse(textOutput.trim());
+        return parsed.analysis || 'Không có phản hồi từ AI.';
+      } catch (e) {
+        console.warn('Lỗi phân tích JSON từ OpenRouter phân tích lỗi phát âm:', e);
+        const textOutput = data.choices[0].message.content;
+        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0].trim()).analysis;
+        }
+        return textOutput.trim();
+      }
+    } catch (err) {
+      console.warn(`Lỗi phân tích phát âm model ${currentModel} trên OpenRouter:`, err);
       triedModels.push(currentModel);
       const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
       if (nextModel) {
@@ -1653,22 +1658,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
         await new Promise(r => setTimeout(r, 1000));
         return callOpenRouterAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
       }
-      throw new Error(errMessage);
-    }
-
-    const data = await response.json();
-    try {
-      const textOutput = data.choices[0].message.content;
-      const parsed = JSON.parse(textOutput.trim());
-      return parsed.analysis || 'Không có phản hồi từ AI.';
-    } catch (e) {
-      console.warn('Lỗi phân tích JSON từ OpenRouter phân tích lỗi phát âm:', e);
-      const textOutput = data.choices[0].message.content;
-      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0].trim()).analysis;
-      }
-      return textOutput.trim();
+      throw new Error(`OpenRouter lỗi: ${err.message}`);
     }
   }
 
@@ -1708,41 +1698,56 @@ Example of expected JSON format:
     const prompt = `Correct Hanzi text: "${target}" (Pinyin: ${pinyin || ''})\nStudent spoken text: "${spoken || ''}" (Pinyin: ${spokenPinyin || ''})`;
     const url = 'https://api.siliconflow.cn/v1/chat/completions';
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + currentKey
-      },
-      body: JSON.stringify({
-        model: currentModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.4
-      })
-    });
-
-    if (!response.ok) {
-      const errInfo = await response.json().catch(() => ({}));
-      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-      throw new Error(errMessage);
-    }
-
-    const data = await response.json();
     try {
-      const textOutput = data.choices[0].message.content;
-      const parsed = JSON.parse(textOutput.trim());
-      return parsed.analysis || 'Không có phản hồi từ AI.';
-    } catch (e) {
-      console.warn('Lỗi phân tích JSON từ SiliconFlow phân tích lỗi phát âm:', e);
-      const textOutput = data.choices[0].message.content;
-      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0].trim()).analysis;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentKey
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.4
+        })
+      });
+
+      if (!response.ok) {
+        const errInfo = await response.json().catch(() => ({}));
+        const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+        throw new Error(errMessage);
       }
-      return textOutput.trim();
+
+      const data = await response.json();
+      try {
+        const textOutput = data.choices[0].message.content;
+        const parsed = JSON.parse(textOutput.trim());
+        return parsed.analysis || 'Không có phản hồi từ AI.';
+      } catch (e) {
+        console.warn('Lỗi phân tích JSON từ SiliconFlow phân tích lỗi phát âm:', e);
+        const textOutput = data.choices[0].message.content;
+        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0].trim()).analysis;
+        }
+        return textOutput.trim();
+      }
+    } catch (err) {
+      console.warn(`Lỗi phân tích phát âm model ${currentModel} trên SiliconFlow:`, err);
+      triedModels.push(currentModel);
+      const nextModel = SILICONFLOW_MODELS.find(m => !triedModels.includes(m.id));
+      if (nextModel) {
+        selectedModel = nextModel.id;
+        localStorage.setItem(SILICONFLOW_MODEL_KEY, nextModel.id);
+        if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
+        
+        await new Promise(r => setTimeout(r, 1000));
+        return callSiliconFlowAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
+      }
+      throw new Error(`SiliconFlow lỗi: ${err.message}`);
     }
   }
 

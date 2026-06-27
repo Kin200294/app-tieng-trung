@@ -95,7 +95,21 @@
   - Tự động thay đổi model sang `gemini-2.5-flash-lite` và lấy đúng key Gemini của hệ thống nếu rơi vào kịch bản dự phòng.
   - Tăng mã cache-busting trong `index.html` và Service Worker `sw.js` lên `hochan-v30`.
 
-#### 2. Tích hợp cổng kết nối SiliconFlow để chạy DeepSeek V3 và R1 hoàn toàn miễn phí
+#### 2. Cách ly các cổng kết nối AI và dừng chuyển đổi chéo nhà cung cấp
+- **Mô tả:** Nhằm đáp ứng yêu cầu của người dùng muốn giữ nguyên kết nối trong nhà cung cấp đã chọn (không tự động nhảy sang Gemini dự phòng), hệ thống đã cách ly hoàn toàn các API provider (Gemini, OpenRouter, SiliconFlow, DeepSeek). Việc xoay vòng model (model rotation) hoặc key chỉ diễn ra trong phạm vi các model của provider đó. Nếu lỗi xảy ra, hệ thống sẽ báo lỗi trực tiếp thay vì tự ý nhảy sang Gemini.
+- **Cách sửa:**
+  - Loại bỏ các khối try-catch fallback chéo nhà cung cấp trong `callGeminiAPI` và `callGeminiAnalysis` ở `aichat.js`.
+  - Bọc fetch và API requests của các hàm `callOpenRouterAPI`, `callSiliconFlowAPI`, `callOpenRouterAnalysis`, `callSiliconFlowAnalysis` bằng các khối try-catch nội bộ để xử lý xoay vòng model tự động trong chính nhà cung cấp đó.
+  - Tái cấu trúc hàm `callWriteAiAnalysis` trong `writer.js` để cô lập các nhánh xử lý (deepseek, openrouter, siliconflow) độc lập và tự xoay vòng model, thay vì chuyển đổi sang Gemini khi có lỗi.
+  - Tăng mã cache-busting trong `index.html` lên `v=30` cho `aichat.js` và `v=10` cho `writer.js`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v34`.
+- **Files thay đổi:**
+  - `deploy/index.html` — Bump phiên bản file scripts.
+  - `deploy/js/aichat.js` — Cách ly định tuyến API, thêm try-catch và model rotation nội bộ cho các cổng.
+  - `deploy/js/writer.js` — Cách ly xử lý API nhận xét nét viết chữ Hán.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v34`.
+
+#### 3. Tích hợp cổng kết nối SiliconFlow để chạy DeepSeek V3 và R1 hoàn toàn miễn phí
 - **Mô tả:** Do OpenRouter đã ngừng cung cấp các model DeepSeek miễn phí (trả về lỗi 404 Not Found), và tài khoản DeepSeek trực tiếp có số dư 0 USD báo lỗi `Insufficient Balance`, hệ thống đã bổ sung cổng kết nối SiliconFlow. Cổng này cho phép người dùng đăng ký miễn phí nhận 14 triệu tokens và chạy các model DeepSeek chính chủ mượt mà.
 - **Cách sửa:**
   - Thêm cổng SiliconFlow vào dropdown select `#aiProviderSelect` trong `index.html`.
@@ -109,7 +123,7 @@
   - `deploy/js/writer.js` — Thêm SiliconFlow vào hàm phân tích nét viết chữ Hán.
   - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v32`.
 
-#### 3. Tích hợp các model Miễn phí qua cổng OpenRouter và loại bỏ các model hết hạn (404)
+#### 4. Tích hợp các model Miễn phí qua cổng OpenRouter và loại bỏ các model hết hạn (404)
 - **Mô tả:** Do OpenRouter đã gỡ bỏ hoàn toàn phiên bản miễn phí của DeepSeek V3 và R1 (trả về lỗi 404), hệ thống đã cập nhật danh sách các model miễn phí mới nhất của OpenRouter vào ứng dụng để tránh lỗi kết nối và tự động fallback.
 - **Cách sửa:**
   - Cập nhật danh sách model OpenRouter sang các dòng máy chủ đang hoạt động miễn phí thực tế: `qwen/qwen3-coder:free` (Alibaba Qwen 3 Coder - cực tốt tiếng Trung), `meta-llama/llama-3.3-70b-instruct:free`, `meta-llama/llama-3.2-3b-instruct:free` và `google/gemma-4-31b-it:free`.
@@ -122,7 +136,7 @@
   - `deploy/js/writer.js` — Cập nhật model list trong phân tích nét viết chữ.
   - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v33`.
 
-#### 4. Khắc phục ReferenceError khi tách file script chạy tuần tự
+#### 5. Khắc phục ReferenceError khi tách file script chạy tuần tự
 - **Mô tả:** Sửa lỗi `ReferenceError: addPoints is not defined` tại `core.js` và lỗi liên đới `Cannot access 'TONE_MAP' before initialization` tại `toneOf` khiến ứng dụng bị trắng trang hoặc không hiển thị từ vựng (hiển thị 0 chữ) khi chạy qua Live Server hoặc cổng cục bộ.
 - **Cách sửa:**
   - Chuyển `addPoints` thành thuộc tính `null` ban đầu trong `window.HanziUI` ở `core.js`.

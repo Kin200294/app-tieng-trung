@@ -284,23 +284,22 @@ Example of expected JSON format:
         const parsed = JSON.parse(textOutput.trim());
         return parsed.analysis || 'Không có phản hồi từ AI.';
       } catch (err) {
-        console.warn('DeepSeek phân tích viết chữ lỗi, chuyển sang Gemini dự phòng:', err);
-        // Tự động chạy tiếp xuống khối code Gemini bên dưới
+        console.warn('DeepSeek phân tích viết chữ lỗi:', err);
+        throw err;
       }
     }
     
     if (provider === 'openrouter') {
-      try {
-        const OPENROUTER_MODELS = [
-          { id: 'qwen/qwen3-coder:free', name: 'Alibaba Qwen 3 Coder (Free - Tiếng Trung tốt nhất)' },
-          { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Meta Llama 3.3 70B (Free)' },
-          { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Meta Llama 3.2 3B (Free)' },
-          { id: 'google/gemma-4-31b-it:free', name: 'Google Gemma 4 31B (Free)' }
-        ];
-        const currentModel = model || localStorage.getItem('hanzi-openrouter-model') || 'qwen/qwen3-coder:free';
-        const currentKey = typeof window.getOpenRouterKey === 'function' ? window.getOpenRouterKey() : apiKey;
+      const OPENROUTER_MODELS = [
+        { id: 'qwen/qwen3-coder:free', name: 'Alibaba Qwen 3 Coder (Free - Tiếng Trung tốt nhất)' },
+        { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Meta Llama 3.3 70B (Free)' },
+        { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Meta Llama 3.2 3B (Free)' },
+        { id: 'google/gemma-4-31b-it:free', name: 'Google Gemma 4 31B (Free)' }
+      ];
+      const currentModel = model || localStorage.getItem('hanzi-openrouter-model') || 'qwen/qwen3-coder:free';
+      const currentKey = typeof window.getOpenRouterKey === 'function' ? window.getOpenRouterKey() : apiKey;
 
-        const systemPrompt = `
+      const systemPrompt = `
 You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
 Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
 The target character is: "${char}"
@@ -320,9 +319,10 @@ Example of expected JSON format:
 }
 `;
 
-        const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
-        const url = `https://openrouter.ai/api/v1/chat/completions`;
+      const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
+      const url = `https://openrouter.ai/api/v1/chat/completions`;
 
+      try {
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -344,14 +344,6 @@ Example of expected JSON format:
         if (!response.ok) {
           const errInfo = await response.json().catch(() => ({}));
           const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-          
-          triedModels.push(currentModel);
-          const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
-          if (nextModel) {
-            localStorage.setItem('hanzi-openrouter-model', nextModel.id);
-            await new Promise(r => setTimeout(r, 1000));
-            return callWriteAiAnalysis(char, mistakes, currentKey, nextModel.id, triedModels, triedKeys);
-          }
           throw new Error(errMessage);
         }
 
@@ -360,17 +352,27 @@ Example of expected JSON format:
         const parsed = JSON.parse(textOutput.trim());
         return parsed.analysis || 'Không có phản hồi từ AI.';
       } catch (err) {
-        console.warn('OpenRouter phân tích viết chữ lỗi, chuyển sang Gemini dự phòng:', err);
-        // Tự động chạy tiếp xuống khối code Gemini bên dưới
+        console.warn(`Lỗi phân tích nét viết chữ model ${currentModel} trên OpenRouter:`, err);
+        triedModels.push(currentModel);
+        const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
+        if (nextModel) {
+          localStorage.setItem('hanzi-openrouter-model', nextModel.id);
+          await new Promise(r => setTimeout(r, 1000));
+          return callWriteAiAnalysis(char, mistakes, currentKey, nextModel.id, triedModels, triedKeys);
+        }
+        throw err;
       }
     }
 
     if (provider === 'siliconflow') {
-      try {
-        const currentModel = model || localStorage.getItem('hanzi-siliconflow-model') || 'deepseek-ai/DeepSeek-V3';
-        const currentKey = typeof window.getSiliconFlowKey === 'function' ? window.getSiliconFlowKey() : localStorage.getItem('hanzi-siliconflow-api-key');
+      const SILICONFLOW_MODELS = [
+        { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3 (SiliconFlow)' },
+        { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1 (SiliconFlow)' }
+      ];
+      const currentModel = model || localStorage.getItem('hanzi-siliconflow-model') || 'deepseek-ai/DeepSeek-V3';
+      const currentKey = typeof window.getSiliconFlowKey === 'function' ? window.getSiliconFlowKey() : localStorage.getItem('hanzi-siliconflow-api-key');
 
-        const systemPrompt = `
+      const systemPrompt = `
 You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
 Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
 The target character is: "${char}"
@@ -390,9 +392,10 @@ Example of expected JSON format:
 }
 `;
 
-        const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
-        const url = 'https://api.siliconflow.cn/v1/chat/completions';
+      const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
+      const url = 'https://api.siliconflow.cn/v1/chat/completions';
 
+      try {
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -420,8 +423,15 @@ Example of expected JSON format:
         const parsed = JSON.parse(textOutput.trim());
         return parsed.analysis || 'Không có phản hồi từ AI.';
       } catch (err) {
-        console.warn('SiliconFlow phân tích viết chữ lỗi, chuyển sang Gemini dự phòng:', err);
-        // Tự động chạy tiếp xuống khối code Gemini bên dưới
+        console.warn(`Lỗi phân tích nét viết chữ model ${currentModel} trên SiliconFlow:`, err);
+        triedModels.push(currentModel);
+        const nextModel = SILICONFLOW_MODELS.find(m => !triedModels.includes(m.id));
+        if (nextModel) {
+          localStorage.setItem('hanzi-siliconflow-model', nextModel.id);
+          await new Promise(r => setTimeout(r, 1000));
+          return callWriteAiAnalysis(char, mistakes, currentKey, nextModel.id, triedModels, triedKeys);
+        }
+        throw err;
       }
     }
 
