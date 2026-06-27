@@ -10,6 +10,10 @@
   const API_KEY_KEY = 'hanzi-gemini-api-key';
   const HISTORY_KEY = 'hanzi-aichat-history-v1';
   const MODEL_KEY = 'hanzi-gemini-model';
+  
+  const PROVIDER_KEY = 'hanzi-ai-provider';
+  const OPENROUTER_MODEL_KEY = 'hanzi-openrouter-model';
+  const OPENROUTER_KEY_KEY = 'hanzi-openrouter-api-key';
 
   // --- Danh sách model miễn phí ---
   const AVAILABLE_MODELS = [
@@ -18,9 +22,26 @@
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', rpm: 30 }
   ];
 
+  const OPENROUTER_MODELS = [
+    { id: 'qwen/qwen-2-7b-instruct:free', name: 'Alibaba Qwen 2 7B (Free)' },
+    { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Meta Llama 3.1 8B (Free)' },
+    { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' }
+  ];
+
   // --- Trạng thái ---
+  let aiProvider = window.getAIProvider();
   let geminiKey = window.getGeminiKey();
-  let selectedModel = localStorage.getItem(MODEL_KEY) || 'gemini-2.5-flash-lite';
+  let openrouterKey = window.getOpenRouterKey();
+
+  function getSelectedModelKey() {
+    return aiProvider === 'openrouter' ? OPENROUTER_MODEL_KEY : MODEL_KEY;
+  }
+
+  function getDefaultModel() {
+    return aiProvider === 'openrouter' ? 'qwen/qwen-2-7b-instruct:free' : 'gemini-2.5-flash-lite';
+  }
+
+  let selectedModel = localStorage.getItem(getSelectedModelKey()) || getDefaultModel();
   let chatHistory = [];
   let lastProfileString = ''; // Theo dõi chuỗi JSON profile trong localStorage để phát hiện đổi tài khoản
   let speechRec = null;
@@ -167,19 +188,79 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   function initChatPage() {
     if (!$('page-aiChat')) return;
 
-    // Cài đặt giá trị API Key ban đầu
-    if ($('geminiApiKeyInput')) {
-      $('geminiApiKeyInput').value = geminiKey;
+    function updateProviderUI() {
+      const instructions = $('aiKeyInstructions');
+      const keyInput = $('geminiApiKeyInput');
+      const modelSelect = $('geminiModelSelect');
+      const configTitle = $('aichatConfigTitle');
+
+      if (aiProvider === 'openrouter') {
+        if (configTitle) configTitle.textContent = '🔑 Cài đặt OpenRouter (Free)';
+        if (instructions) {
+          instructions.innerHTML = 'Để kết nối AI, bạn có thể sử dụng mã API Key OpenRouter mặc định hoặc lấy mã cá nhân tại <a href="https://openrouter.ai/" target="_blank" style="color: var(--gold-1); text-decoration: underline;">OpenRouter.ai</a> rồi dán vào bên dưới:';
+        }
+        if (keyInput) {
+          keyInput.value = window.getOpenRouterKey();
+        }
+        if (modelSelect) {
+          modelSelect.innerHTML = `
+            <option value="qwen/qwen-2-7b-instruct:free" style="background:#1a1a2e; color:#e0e0e0;">🤖 Alibaba Qwen 2 7B (Free - Khuyên dùng)</option>
+            <option value="meta-llama/llama-3.1-8b-instruct:free" style="background:#1a1a2e; color:#e0e0e0;">⚡ Meta Llama 3.1 8B (Free)</option>
+            <option value="google/gemma-2-9b-it:free" style="background:#1a1a2e; color:#e0e0e0;">🪶 Google Gemma 2 9B (Free)</option>
+          `;
+          selectedModel = localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen-2-7b-instruct:free';
+          modelSelect.value = selectedModel;
+        }
+      } else {
+        if (configTitle) configTitle.textContent = '🔑 Cài đặt Google Gemini (Miễn phí)';
+        if (instructions) {
+          instructions.innerHTML = 'Để trò chuyện cùng AI, bạn có thể dùng khóa mặc định hoặc lấy mã trong 30 giây bằng cách bấm vào <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--gold-1); text-decoration: underline;">Google AI Studio</a> rồi dán vào bên dưới:';
+        }
+        if (keyInput) {
+          keyInput.value = window.getGeminiKey();
+        }
+        if (modelSelect) {
+          modelSelect.innerHTML = `
+            <option value="gemini-2.5-flash-lite" style="background:#1a1a2e; color:#e0e0e0;">🪶 Gemini 2.5 Flash Lite (30 lượt/phút - Khuyên dùng)</option>
+            <option value="gemini-2.5-flash" style="background:#1a1a2e; color:#e0e0e0;">⚡ Gemini 2.5 Flash (15 lượt/phút)</option>
+            <option value="gemini-2.0-flash-lite" style="background:#1a1a2e; color:#e0e0e0;">💡 Gemini 2.0 Flash Lite (30 lượt/phút)</option>
+          `;
+          selectedModel = localStorage.getItem(MODEL_KEY) || 'gemini-2.5-flash-lite';
+          modelSelect.value = selectedModel;
+        }
+      }
     }
 
-    // Cài đặt giá trị Model ban đầu
+    // Thiết lập giá trị ban đầu cho cổng kết nối
+    if ($('aiProviderSelect')) {
+      $('aiProviderSelect').value = aiProvider;
+      $('aiProviderSelect').onchange = () => {
+        aiProvider = $('aiProviderSelect').value;
+        localStorage.setItem(PROVIDER_KEY, aiProvider);
+        updateProviderUI();
+        updateStatus(`Đã chuyển cổng kết nối: ${aiProvider === 'openrouter' ? 'OpenRouter' : 'Google Gemini'}`);
+      };
+    }
+
+    // Chạy đồng bộ UI lúc khởi động
+    updateProviderUI();
+
+    // Lắng nghe sự kiện đổi Model trực tiếp
     if ($('geminiModelSelect')) {
-      $('geminiModelSelect').value = selectedModel;
       $('geminiModelSelect').onchange = () => {
         selectedModel = $('geminiModelSelect').value;
-        localStorage.setItem(MODEL_KEY, selectedModel);
-        const modelInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
-        updateStatus(`Đã chọn: ${modelInfo?.name || selectedModel}`);
+        const currentModelKey = getSelectedModelKey();
+        localStorage.setItem(currentModelKey, selectedModel);
+        
+        let modelName = selectedModel;
+        if (aiProvider === 'openrouter') {
+          const mInfo = OPENROUTER_MODELS.find(m => m.id === selectedModel);
+          if (mInfo) modelName = mInfo.name;
+        } else {
+          const mInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
+          if (mInfo) modelName = mInfo.name;
+        }
+        updateStatus(`Đã chọn: ${modelName}`);
       };
     }
 
@@ -202,16 +283,28 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     if ($('btnSaveApiKey')) {
       $('btnSaveApiKey').onclick = () => {
         let val = $('geminiApiKeyInput').value.trim();
-        if (!val) {
-          val = window.getGeminiKey();
-          $('geminiApiKeyInput').value = val;
-        }
-        geminiKey = val;
-        localStorage.setItem(API_KEY_KEY, val);
-        // Lưu model đã chọn
-        if ($('geminiModelSelect')) {
-          selectedModel = $('geminiModelSelect').value;
-          localStorage.setItem(MODEL_KEY, selectedModel);
+        if (aiProvider === 'openrouter') {
+          if (!val) {
+            val = window.getOpenRouterKey();
+            $('geminiApiKeyInput').value = val;
+          }
+          openrouterKey = val;
+          localStorage.setItem(OPENROUTER_KEY_KEY, val);
+          if ($('geminiModelSelect')) {
+            selectedModel = $('geminiModelSelect').value;
+            localStorage.setItem(OPENROUTER_MODEL_KEY, selectedModel);
+          }
+        } else {
+          if (!val) {
+            val = window.getGeminiKey();
+            $('geminiApiKeyInput').value = val;
+          }
+          geminiKey = val;
+          localStorage.setItem(API_KEY_KEY, val);
+          if ($('geminiModelSelect')) {
+            selectedModel = $('geminiModelSelect').value;
+            localStorage.setItem(MODEL_KEY, selectedModel);
+          }
         }
         alertUi('Đã lưu API Key và Model thành công!');
         // Tự động thu gọn bảng sau khi lưu
@@ -609,8 +702,14 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     if (isThinking) return;
 
     // Kiểm tra API Key trước khi thực hiện gửi
-    if (!geminiKey) {
-      geminiKey = window.getGeminiKey();
+    if (aiProvider === 'openrouter') {
+      if (!openrouterKey) {
+        openrouterKey = window.getOpenRouterKey();
+      }
+    } else {
+      if (!geminiKey) {
+        geminiKey = window.getGeminiKey();
+      }
     }
 
     // 1. Thêm tin nhắn của User vào lịch sử và render
@@ -687,6 +786,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
 
   // --- Gọi API Gemini (có tự động chuyển model và API key khi bị rate-limit/lỗi) ---
   async function callGeminiAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
+    if (aiProvider === 'openrouter') {
+      return callOpenRouterAPI(history, modelOverride, triedModels, triedKeys);
+    }
     const currentModel = modelOverride || selectedModel;
     const currentKey = geminiKey;
     const contents = [];
@@ -821,6 +923,83 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         return JSON.parse(jsonMatch[0].trim());
       }
       // Trả về đối tượng cơ bản nếu hoàn toàn thất bại trong việc lấy JSON
+      return {
+        hanzi: textOutput,
+        pinyin: '',
+        vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
+      };
+    }
+  }
+
+  // --- Gọi API OpenRouter ---
+  async function callOpenRouterAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen-2-7b-instruct:free';
+    const currentKey = openrouterKey || window.getOpenRouterKey();
+
+    const maxContext = 8;
+    const recentHistory = history.slice(-maxContext);
+    const messages = [
+      { role: 'system', content: SYSTEM_INSTRUCTIONS }
+    ];
+
+    recentHistory.forEach(msg => {
+      if (msg.text.startsWith('❌')) return;
+      messages.push({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      });
+    });
+
+    const modelInfo = OPENROUTER_MODELS.find(m => m.id === currentModel) || { name: currentModel };
+    updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
+
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + currentKey,
+        'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
+        'X-Title': 'Học Chữ Hán App'
+      },
+      body: JSON.stringify({
+        model: currentModel,
+        messages: messages,
+        temperature: 0.4
+      })
+    });
+
+    if (!response.ok) {
+      const errInfo = await response.json().catch(() => ({}));
+      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+      
+      // Thử xoay vòng sang model khác của OpenRouter
+      triedModels.push(currentModel);
+      const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
+      if (nextModel) {
+        updateStatus(`OpenRouter model bận → Chuyển sang ${nextModel.name}...`, true);
+        await new Promise(r => setTimeout(r, 1000));
+        
+        selectedModel = nextModel.id;
+        localStorage.setItem(OPENROUTER_MODEL_KEY, nextModel.id);
+        if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
+        
+        return callOpenRouterAPI(history, nextModel.id, triedModels, triedKeys);
+      }
+      throw new Error(errMessage);
+    }
+
+    const data = await response.json();
+    try {
+      const textOutput = data.choices[0].message.content;
+      return JSON.parse(textOutput.trim());
+    } catch (e) {
+      console.warn('Lỗi phân tích JSON từ OpenRouter, thử trích xuất thủ công:', e);
+      const textOutput = data.choices[0].message.content;
+      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0].trim());
+      }
       return {
         hanzi: textOutput,
         pinyin: '',
@@ -973,6 +1152,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
 
   // --- Gọi API Gemini để phân tích lỗi phát âm (có tự động chuyển model và API key) ---
   async function callGeminiAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
+    if (aiProvider === 'openrouter') {
+      return callOpenRouterAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+    }
     if (!geminiKey) {
       geminiKey = window.getGeminiKey();
     }
@@ -1120,6 +1302,101 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
     } catch (e) {
       console.warn('Lỗi phân tích JSON từ AI phân tích lỗi:', e);
       const textOutput = data.candidates[0].content.parts[0].text;
+      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0].trim()).analysis;
+      }
+      return textOutput.trim();
+    }
+  }
+
+  // --- Gọi API OpenRouter để phân tích lỗi phát âm ---
+  async function callOpenRouterAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen-2-7b-instruct:free';
+    const currentKey = openrouterKey || window.getOpenRouterKey();
+    
+    // Lấy Pinyin của từ học sinh phát âm ra
+    let spokenPinyin = '';
+    try {
+      spokenPinyin = (window.pinyinPro && typeof window.pinyinPro.pinyin === 'function' && spoken && spoken.trim()) ? window.pinyinPro.pinyin(spoken.trim()) : '';
+    } catch (e) {
+      console.warn('pinyin-pro lỗi khi phân tích spoken text:', e);
+    }
+
+    const systemPrompt = `
+You are a warm, encouraging Chinese teacher. The student is practicing pronunciation.
+Compare the correct Chinese text (and its Pinyin) with what the student actually pronounced (and its recognized Pinyin), and analyze their pronunciation errors in clear, friendly Vietnamese.
+
+Specifically, look out for and guide the student on:
+1. Tones (Thanh điệu): Compare the correct Pinyin with the recognized Pinyin. Point out incorrect tones. Pay special attention to:
+   - Confusion between Tone 1 (flat, high) and short pronunciation.
+   - Tone 3 (low-dipping-and-rising) read as flat or like Vietnamese grave accent (dấu huyền) or question mark.
+   - Tone 4 (high-falling, sharp and short) read as flat or like Vietnamese grave accent (dấu huyền). Instruct the student to pronounce it forcefully and falling.
+2. Initials (Phụ âm đầu): Check if they missed aspiration (p, t, k, q, c, ch) or confused dental sibilants (z, c, s) with retroflexes (zh, ch, sh, r) or palatals (j, q, x).
+3. Finals (Vận mẫu / Vần): Check if they confused vowels (u vs ü, e vs o) or nasal endings (an vs ang, en vs eng, in vs ing).
+
+Important Rules for Analysis:
+- VERY IMPORTANT (Homophones / Chữ đồng âm): If the recognized Pinyin is identical or extremely close to the correct Pinyin, but the Chinese characters are different (due to Google Speech-to-Text recognizing a homophone, e.g., 'shì' recognized as '事' or '市' instead of '是'), praise the student that their pronunciation was actually correct and they did a great job, and explain that the system just outputted a homophone.
+- If they pronounced it very well (pronunciation and Pinyin match perfectly), praise them warmly and encourage them.
+- If the student spoke something completely unrelated or Web Speech API failed to recognize (spoken text is empty or garbled), politely ask them to try speaking again closer to the microphone, speak louder and more clearly, or try imitating the sample audio.
+- Keep the feedback extremely short, actionable, and friendly (maximum 2-3 sentences).
+- You MUST respond in a strictly structured JSON format with a single field:
+   - "analysis": Your feedback in Vietnamese.
+
+Example of expected JSON format:
+{
+  "analysis": "Tuyệt vời! Bạn phát âm rất chuẩn chữ này, từ thanh điệu đến phụ âm đầu đều rất tốt."
+}
+
+Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not include backticks, and do not add any explanation or other text.
+`;
+
+    const prompt = `Correct Chinese: "${target}" (Pinyin: "${pinyin}")\nStudent pronounced: "${spoken}"${spokenPinyin ? ` (Recognized Pinyin: "${spokenPinyin}")` : ''}`;
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + currentKey,
+        'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
+        'X-Title': 'Học Chữ Hán App'
+      },
+      body: JSON.stringify({
+        model: currentModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2
+      })
+    });
+
+    if (!response.ok) {
+      const errInfo = await response.json().catch(() => ({}));
+      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+      
+      triedModels.push(currentModel);
+      const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
+      if (nextModel) {
+        selectedModel = nextModel.id;
+        localStorage.setItem(OPENROUTER_MODEL_KEY, nextModel.id);
+        if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
+        
+        await new Promise(r => setTimeout(r, 1000));
+        return callOpenRouterAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
+      }
+      throw new Error(errMessage);
+    }
+
+    const data = await response.json();
+    try {
+      const textOutput = data.choices[0].message.content;
+      const parsed = JSON.parse(textOutput.trim());
+      return parsed.analysis || 'Không có phản hồi từ AI.';
+    } catch (e) {
+      console.warn('Lỗi phân tích JSON từ OpenRouter phân tích lỗi phát âm:', e);
+      const textOutput = data.choices[0].message.content;
       const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0].trim()).analysis;

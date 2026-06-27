@@ -207,20 +207,27 @@
     <!-- Cài đặt API Key -->
     <div class="aichat-config-panel">
       <div class="aichat-config-header" id="aichatConfigHeader">
-        <h4>🔑 Cài đặt API Key Gemini (Miễn phí)</h4>
+        <h4 id="aichatConfigTitle">🔑 Cài đặt AI & API Key</h4>
         <button class="aichat-config-toggle" id="btnToggleConfig">▼</button>
       </div>
       <div class="aichat-config-body" id="aichatConfigBody" style="display: none;">
-        <p>Để trò chuyện cùng AI, bạn cần một mã API Key Gemini miễn phí. Bạn có thể lấy mã trong 30 giây bằng cách bấm vào <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>, tạo khóa API mới, sau đó dán vào ô dưới đây:</p>
+        <div class="aichat-input-row" style="margin-bottom: 8px; align-items: center;">
+          <label for="aiProviderSelect" style="color: var(--gold-1); font-size: 0.85rem; white-space: nowrap; font-weight: 600; margin-right: 8px;">🌐 Cổng kết nối:</label>
+          <select id="aiProviderSelect" style="flex:1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-card, #1a1a2e); color: var(--fg, #e0e0e0); font-size: 0.9rem; cursor: pointer; appearance: auto; -webkit-appearance: auto;">
+            <option value="gemini" style="background:#1a1a2e; color:#e0e0e0;">Google Gemini (Tự động xoay vòng)</option>
+            <option value="openrouter" style="background:#1a1a2e; color:#e0e0e0;">OpenRouter (Llama & Qwen Miễn phí)</option>
+          </select>
+        </div>
+        <p id="aiKeyInstructions" style="font-size: 0.9rem; margin-bottom: 8px; line-height: 1.4;">Để trò chuyện cùng AI, bạn có thể dùng khóa mặc định hoặc nhập khóa cá nhân của bạn:</p>
         <div class="aichat-input-row">
-          <input type="password" id="geminiApiKeyInput" class="aichat-key-input" placeholder="Dán API Key của bạn tại đây..." autocomplete="off">
+          <input type="password" id="geminiApiKeyInput" class="aichat-key-input" placeholder="Dán API Key tại đây..." autocomplete="off">
           <button class="btn-gold" id="btnSaveApiKey" style="padding: 10px 16px; border-radius: 8px;">Lưu</button>
         </div>
         <div class="aichat-input-row" style="margin-top: 8px; align-items: center;">
-          <label for="geminiModelSelect" style="color: var(--gold-1); font-size: 0.85rem; white-space: nowrap; font-weight: 600;">🤖 Model AI:</label>
+          <label for="geminiModelSelect" style="color: var(--gold-1); font-size: 0.85rem; white-space: nowrap; font-weight: 600; margin-right: 8px;">🤖 Model AI:</label>
           <select id="geminiModelSelect" style="flex:1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-card, #1a1a2e); color: var(--fg, #e0e0e0); font-size: 0.9rem; cursor: pointer; appearance: auto; -webkit-appearance: auto;">
-            <option value="gemini-2.5-flash" style="background:#1a1a2e; color:#e0e0e0;">⚡ Gemini 2.5 Flash (15 lượt/phút)</option>
             <option value="gemini-2.5-flash-lite" style="background:#1a1a2e; color:#e0e0e0;">🪶 Gemini 2.5 Flash Lite (30 lượt/phút)</option>
+            <option value="gemini-2.5-flash" style="background:#1a1a2e; color:#e0e0e0;">⚡ Gemini 2.5 Flash (15 lượt/phút)</option>
             <option value="gemini-2.0-flash-lite" style="background:#1a1a2e; color:#e0e0e0;">💡 Gemini 2.0 Flash Lite (30 lượt/phút)</option>
           </select>
         </div>
@@ -576,7 +583,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.26.0/dist/index.js"></script>
 <!-- HanziWriter for stroke animation and quiz -->
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
-<script src="js/core.js?v=5"></script>
+<script src="js/core.js?v=6"></script>
 <script src="js/db.js?v=1"></script>
 <script src="js/auth.js?v=2"></script>
 <script src="js/flashcard.js?v=1"></script>
@@ -584,10 +591,10 @@
 <script src="js/quiz.js?v=1"></script>
 <script src="js/game.js?v=1"></script>
 <script src="js/passage.js?v=1"></script>
-<script src="js/writer.js?v=3"></script>
+<script src="js/writer.js?v=4"></script>
 <script src="js/dashboard.js?v=2"></script>
 <script src="js/app_init.js?v=1"></script>
 <script src="js/exam.js?v=17"></script>
-<script src="js/aichat.js?v=23"></script>
+<script src="js/aichat.js?v=24"></script>
 </body>
 </html>

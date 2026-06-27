@@ -67,6 +67,15 @@
   - `deploy/index.html` (BUMP) — Nạp stylesheet `dashboard.css?v=1` và nâng cache version `js/dashboard.js?v=2`.
   - `deploy/sw.js` (BUMP) — Cập nhật tài nguyên cache offline `ASSETS` bao gồm `./dashboard.css`, nâng cache Service Worker lên `hochan-v15`.
 
+#### 7. Tích hợp cổng kết nối AI OpenRouter (Miễn phí Llama & Qwen)
+- **Mô tả:** Tích hợp tùy chọn cổng kết nối mới bên cạnh Google Gemini trong phần cài đặt API Key. Cho phép người dùng chuyển đổi linh hoạt giữa Google Gemini và OpenRouter. Cấu hình mặc định sử dụng API Key cá nhân của giáo viên đã được cung cấp (mã hóa Base64) để tự động đăng nhập. Hỗ trợ 3 model miễn phí của OpenRouter gồm Qwen 2 7B (Khuyên dùng), Llama 3.1 8B, và Gemma 2 9B. Tự động xoay vòng qua các model miễn phí khác khi gặp lỗi quá tải hoặc giới hạn lượt gọi (429/503). Đã đồng bộ đầy đủ cổng kết nối OpenRouter cho cả 3 mô-đun: Trò chuyện AI, Luyện phát âm AI, và Phân tích nét viết chữ Hán.
+- **Files thay đổi:**
+  - `deploy/index.html` — Bổ sung selector `#aiProviderSelect`, tối ưu các nhãn cài đặt và bump version cache.
+  - `deploy/js/core.js` — Định nghĩa `DEFAULT_OPENROUTER_KEY_B64`, các hàm tiện ích `getOpenRouterKey()`, `getAIProvider()`.
+  - `deploy/js/aichat.js` — Thêm hàm `callOpenRouterAPI()` và `callOpenRouterAnalysis()`, bổ sung phân nhánh provider trong logic gọi API chat và chấm điểm phát âm.
+  - `deploy/js/writer.js` — Đồng bộ hóa logic `callWriteAiAnalysis()` phân nhánh provider để gửi yêu cầu phân tích nét viết chữ Hán qua OpenRouter.
+  - `deploy/sw.js` — Nâng phiên bản cache Service Worker lên `hochan-v28`.
+
 ### 🐛 Lỗi đã sửa
 
 #### 1. Khắc phục ReferenceError khi tách file script chạy tuần tự

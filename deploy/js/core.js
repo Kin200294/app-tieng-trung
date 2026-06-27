@@ -318,6 +318,9 @@
   ];
   const DEFAULT_GEMINI_KEYS = DEFAULT_GEMINI_KEYS_B64.map(k => atob(k));
 
+  // Mã hóa Base64 key OpenRouter của người dùng
+  const DEFAULT_OPENROUTER_KEY_B64 = 'c2stb3ItdjEtMjMwY2UxNzNjYTM2M2RiMjY3ZGU5YThhNDA5NjJhOTgxMjI5MGZhOGJkOTRmMWU2NTlkYzk1YmZhYWFmNjVhMQ==';
+
   window.getGeminiKey = function() {
     let key = localStorage.getItem('hanzi-gemini-api-key') || '';
     if (!key) {
@@ -351,4 +354,17 @@
 
   window.isDefaultGeminiKey = function(key) {
     return DEFAULT_GEMINI_KEYS.includes(key);
+  };
+
+  window.getOpenRouterKey = function() {
+    let key = localStorage.getItem('hanzi-openrouter-api-key') || '';
+    if (!key) {
+      key = atob(DEFAULT_OPENROUTER_KEY_B64);
+      localStorage.setItem('hanzi-openrouter-api-key', key);
+    }
+    return key;
+  };
+
+  window.getAIProvider = function() {
+    return localStorage.getItem('hanzi-ai-provider') || 'gemini';
   };
