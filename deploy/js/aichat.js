@@ -14,6 +14,9 @@
   const PROVIDER_KEY = 'hanzi-ai-provider';
   const OPENROUTER_MODEL_KEY = 'hanzi-openrouter-model';
   const OPENROUTER_KEY_KEY = 'hanzi-openrouter-api-key';
+  
+  const DEEPSEEK_MODEL_KEY = 'hanzi-deepseek-model';
+  const DEEPSEEK_KEY_KEY = 'hanzi-deepseek-api-key';
 
   // --- Danh sách model miễn phí ---
   const AVAILABLE_MODELS = [
@@ -28,17 +31,26 @@
     { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' }
   ];
 
+  const DEEPSEEK_MODELS = [
+    { id: 'deepseek-chat', name: 'DeepSeek Chat (V3)' }
+  ];
+
   // --- Trạng thái ---
   let aiProvider = window.getAIProvider();
   let geminiKey = window.getGeminiKey();
   let openrouterKey = window.getOpenRouterKey();
+  let deepseekKey = window.getDeepSeekKey();
 
   function getSelectedModelKey() {
-    return aiProvider === 'openrouter' ? OPENROUTER_MODEL_KEY : MODEL_KEY;
+    if (aiProvider === 'openrouter') return OPENROUTER_MODEL_KEY;
+    if (aiProvider === 'deepseek') return DEEPSEEK_MODEL_KEY;
+    return MODEL_KEY;
   }
 
   function getDefaultModel() {
-    return aiProvider === 'openrouter' ? 'qwen/qwen-2-7b-instruct:free' : 'gemini-2.5-flash-lite';
+    if (aiProvider === 'openrouter') return 'qwen/qwen-2-7b-instruct:free';
+    if (aiProvider === 'deepseek') return 'deepseek-chat';
+    return 'gemini-2.5-flash-lite';
   }
 
   let selectedModel = localStorage.getItem(getSelectedModelKey()) || getDefaultModel();
@@ -211,6 +223,21 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           selectedModel = localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen-2-7b-instruct:free';
           modelSelect.value = selectedModel;
         }
+      } else if (aiProvider === 'deepseek') {
+        if (configTitle) configTitle.textContent = '🔑 Cài đặt DeepSeek (Trực tiếp)';
+        if (instructions) {
+          instructions.innerHTML = 'Để kết nối AI, bạn có thể sử dụng mã API Key DeepSeek mặc định hoặc lấy mã cá nhân tại <a href="https://platform.deepseek.com/" target="_blank" style="color: var(--gold-1); text-decoration: underline;">platform.deepseek.com</a> rồi dán vào bên dưới:';
+        }
+        if (keyInput) {
+          keyInput.value = window.getDeepSeekKey();
+        }
+        if (modelSelect) {
+          modelSelect.innerHTML = `
+            <option value="deepseek-chat" style="background:#1a1a2e; color:#e0e0e0;">🤖 DeepSeek Chat (V3 - Khuyên dùng)</option>
+          `;
+          selectedModel = localStorage.getItem(DEEPSEEK_MODEL_KEY) || 'deepseek-chat';
+          modelSelect.value = selectedModel;
+        }
       } else {
         if (configTitle) configTitle.textContent = '🔑 Cài đặt Google Gemini (Miễn phí)';
         if (instructions) {
@@ -238,7 +265,10 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         aiProvider = $('aiProviderSelect').value;
         localStorage.setItem(PROVIDER_KEY, aiProvider);
         updateProviderUI();
-        updateStatus(`Đã chuyển cổng kết nối: ${aiProvider === 'openrouter' ? 'OpenRouter' : 'Google Gemini'}`);
+        let providerLabel = 'Google Gemini';
+        if (aiProvider === 'openrouter') providerLabel = 'OpenRouter';
+        else if (aiProvider === 'deepseek') providerLabel = 'DeepSeek';
+        updateStatus(`Đã chuyển cổng kết nối: ${providerLabel}`);
       };
     }
 
@@ -255,6 +285,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         let modelName = selectedModel;
         if (aiProvider === 'openrouter') {
           const mInfo = OPENROUTER_MODELS.find(m => m.id === selectedModel);
+          if (mInfo) modelName = mInfo.name;
+        } else if (aiProvider === 'deepseek') {
+          const mInfo = DEEPSEEK_MODELS.find(m => m.id === selectedModel);
           if (mInfo) modelName = mInfo.name;
         } else {
           const mInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
@@ -293,6 +326,17 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           if ($('geminiModelSelect')) {
             selectedModel = $('geminiModelSelect').value;
             localStorage.setItem(OPENROUTER_MODEL_KEY, selectedModel);
+          }
+        } else if (aiProvider === 'deepseek') {
+          if (!val) {
+            val = window.getDeepSeekKey();
+            $('geminiApiKeyInput').value = val;
+          }
+          deepseekKey = val;
+          localStorage.setItem(DEEPSEEK_KEY_KEY, val);
+          if ($('geminiModelSelect')) {
+            selectedModel = $('geminiModelSelect').value;
+            localStorage.setItem(DEEPSEEK_MODEL_KEY, selectedModel);
           }
         } else {
           if (!val) {
@@ -706,6 +750,10 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       if (!openrouterKey) {
         openrouterKey = window.getOpenRouterKey();
       }
+    } else if (aiProvider === 'deepseek') {
+      if (!deepseekKey) {
+        deepseekKey = window.getDeepSeekKey();
+      }
     } else {
       if (!geminiKey) {
         geminiKey = window.getGeminiKey();
@@ -788,6 +836,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   async function callGeminiAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
     if (aiProvider === 'openrouter') {
       return callOpenRouterAPI(history, modelOverride, triedModels, triedKeys);
+    }
+    if (aiProvider === 'deepseek') {
+      return callDeepSeekAPI(history, modelOverride, triedModels, triedKeys);
     }
     const currentModel = modelOverride || selectedModel;
     const currentKey = geminiKey;
@@ -1008,6 +1059,67 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     }
   }
 
+  // --- Gọi API DeepSeek ---
+  async function callDeepSeekAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(DEEPSEEK_MODEL_KEY) || 'deepseek-chat';
+    const currentKey = deepseekKey || window.getDeepSeekKey();
+
+    const maxContext = 8;
+    const recentHistory = history.slice(-maxContext);
+    const messages = [
+      { role: 'system', content: SYSTEM_INSTRUCTIONS }
+    ];
+
+    recentHistory.forEach(msg => {
+      if (msg.text.startsWith('❌')) return;
+      messages.push({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      });
+    });
+
+    const modelInfo = DEEPSEEK_MODELS.find(m => m.id === currentModel) || { name: currentModel };
+    updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
+
+    const url = 'https://api.deepseek.com/chat/completions';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + currentKey
+      },
+      body: JSON.stringify({
+        model: currentModel,
+        messages: messages,
+        temperature: 0.4
+      })
+    });
+
+    if (!response.ok) {
+      const errInfo = await response.json().catch(() => ({}));
+      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+      throw new Error(errMessage);
+    }
+
+    const data = await response.json();
+    try {
+      const textOutput = data.choices[0].message.content;
+      return JSON.parse(textOutput.trim());
+    } catch (e) {
+      console.warn('Lỗi phân tích JSON từ DeepSeek, thử trích xuất thủ công:', e);
+      const textOutput = data.choices[0].message.content;
+      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0].trim());
+      }
+      return {
+        hanzi: textOutput,
+        pinyin: '',
+        vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
+      };
+    }
+  }
+
   // --- Giao diện vẽ tin nhắn ---
   function renderChatMessages() {
     const stage = $('aichatMessages');
@@ -1154,6 +1266,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   async function callGeminiAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
     if (aiProvider === 'openrouter') {
       return callOpenRouterAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+    }
+    if (aiProvider === 'deepseek') {
+      return callDeepSeekAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
     }
     if (!geminiKey) {
       geminiKey = window.getGeminiKey();
@@ -1396,6 +1511,88 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       return parsed.analysis || 'Không có phản hồi từ AI.';
     } catch (e) {
       console.warn('Lỗi phân tích JSON từ OpenRouter phân tích lỗi phát âm:', e);
+      const textOutput = data.choices[0].message.content;
+      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0].trim()).analysis;
+      }
+      return textOutput.trim();
+    }
+  }
+
+  // --- Gọi API DeepSeek để phân tích lỗi phát âm ---
+  async function callDeepSeekAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(DEEPSEEK_MODEL_KEY) || 'deepseek-chat';
+    const currentKey = deepseekKey || window.getDeepSeekKey();
+    
+    // Lấy Pinyin của từ học sinh phát âm ra
+    let spokenPinyin = '';
+    try {
+      spokenPinyin = (window.pinyinPro && typeof window.pinyinPro.pinyin === 'function' && spoken && spoken.trim()) ? window.pinyinPro.pinyin(spoken.trim()) : '';
+    } catch (e) {
+      console.warn('pinyin-pro lỗi khi phân tích spoken text:', e);
+    }
+
+    const systemPrompt = `
+You are a warm, encouraging Chinese teacher. The student is practicing pronunciation.
+Compare the correct Chinese text (and its Pinyin) with what the student actually pronounced (and its recognized Pinyin), and analyze their pronunciation errors in clear, friendly Vietnamese.
+
+Specifically, look out for and guide the student on:
+1. Tones (Thanh điệu): Compare the correct Pinyin with the recognized Pinyin. Point out incorrect tones. Pay special attention to:
+   - Confusion between Tone 1 (flat, high) and short pronunciation.
+   - Tone 3 (low-dipping-and-rising) read as flat or like Vietnamese grave accent (dấu huyền) or question mark.
+   - Tone 4 (high-falling, sharp and short) read as flat or like Vietnamese grave accent (dấu huyền). Instruct the student to pronounce it forcefully and falling.
+2. Initials (Phụ âm đầu): Check if they missed aspiration (p, t, k, q, c, ch) or confused dental sibilants (z, c, s) with retroflexes (zh, ch, sh, r) or palatals (j, q, x).
+3. Finals (Vận mẫu / Vần): Check if they confused vowels (u vs ü, e vs o) or nasal endings (an vs ang, en vs eng, in vs ing).
+
+Important Rules for Analysis:
+- VERY IMPORTANT (Homophones / Chữ đồng âm): If the recognized Pinyin is identical or extremely close to the correct Pinyin, but the Chinese characters are different (due to Google Speech-to-Text recognizing a homophone, e.g., 'shì' recognized as '事' or '市' instead of '是'), praise the student that their pronunciation was actually correct and they did a great job, and explain that the system just outputted a homophone.
+- If they pronounced it very well (pronunciation and Pinyin match perfectly), praise them warmly and encourage them.
+- If the student spoke something completely unrelated or Web Speech API failed to recognize (spoken text is empty or garbled), politely ask them to try speaking again closer to the microphone, speak louder and more clearly, or try imitating the sample audio.
+- Keep the feedback extremely short, actionable, and friendly (maximum 2-3 sentences).
+- You MUST respond in a strictly structured JSON format with a single field:
+   - "analysis": Your feedback in Vietnamese.
+
+Example of expected JSON format:
+{
+  "analysis": "Tuyệt vời! Bạn phát âm rất chuẩn chữ này, từ thanh điệu đến phụ âm đầu đều rất tốt."
+}
+
+Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not include backticks, and do not add any explanation or other text.
+`;
+
+    const prompt = `Correct Chinese: "${target}" (Pinyin: "${pinyin}")\nStudent pronounced: "${spoken}"${spokenPinyin ? ` (Recognized Pinyin: "${spokenPinyin}")` : ''}`;
+    const url = 'https://api.deepseek.com/chat/completions';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + currentKey
+      },
+      body: JSON.stringify({
+        model: currentModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2
+      })
+    });
+
+    if (!response.ok) {
+      const errInfo = await response.json().catch(() => ({}));
+      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+      throw new Error(errMessage);
+    }
+
+    const data = await response.json();
+    try {
+      const textOutput = data.choices[0].message.content;
+      const parsed = JSON.parse(textOutput.trim());
+      return parsed.analysis || 'Không có phản hồi từ AI.';
+    } catch (e) {
+      console.warn('Lỗi phân tích JSON từ DeepSeek phân tích lỗi phát âm:', e);
       const textOutput = data.choices[0].message.content;
       const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
       if (jsonMatch) {

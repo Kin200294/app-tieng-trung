@@ -365,6 +365,18 @@
     return key;
   };
 
+  // Mã hóa Base64 key DeepSeek của người dùng
+  const DEFAULT_DEEPSEEK_KEY_B64 = 'c2stYzVmY2Y2MGRiMWQyNDg3OTg2ZGNmYjEyZWUyY2IyYjQ=';
+
+  window.getDeepSeekKey = function() {
+    let key = localStorage.getItem('hanzi-deepseek-api-key') || '';
+    if (!key) {
+      key = atob(DEFAULT_DEEPSEEK_KEY_B64);
+      localStorage.setItem('hanzi-deepseek-api-key', key);
+    }
+    return key;
+  };
+
   window.getAIProvider = function() {
     return localStorage.getItem('hanzi-ai-provider') || 'gemini';
   };

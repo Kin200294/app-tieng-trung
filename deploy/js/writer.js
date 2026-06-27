@@ -229,6 +229,71 @@
   async function callWriteAiAnalysis(char, mistakes, apiKey, model, triedModels = [], triedKeys = []) {
     const provider = typeof window.getAIProvider === 'function' ? window.getAIProvider() : 'gemini';
     
+    if (provider === 'deepseek') {
+      const currentModel = model || localStorage.getItem('hanzi-deepseek-model') || 'deepseek-chat';
+      const currentKey = typeof window.getDeepSeekKey === 'function' ? window.getDeepSeekKey() : apiKey;
+
+      const systemPrompt = `
+You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
+Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
+The target character is: "${char}"
+The student made ${mistakes} mistakes while writing this character.
+
+Based on the character's structure and the number of mistakes:
+1. Explain the components/radicals (bộ thủ) of the character (e.g. for "ni" '你', it has bộ Nhân đứng '亻' on the left and '尔' on the right).
+2. Give clear, actionable advice in Vietnamese on the stroke order (thứ tự nét) and stroke direction (hướng nét) to help them write correctly.
+3. Keep the feedback concise (maximum 3 sentences) so it fits in the popup.
+4. Encourage them.
+5. You MUST respond in a strictly structured JSON format with a single field:
+   - "analysis": Your feedback in Vietnamese.
+
+Example of expected JSON format:
+{
+  "analysis": "Chữ 'Ni' gồm bộ Nhân đứng (亻) bên trái và chữ '尔' bên phải. Bạn hãy lưu ý viết bộ Nhân đứng trước (phẩy rồi sổ), sau đó viết chữ '尔' (phẩy, ngang móc, phẩy, cong móc và hai nét chấm). Hãy cố gắng nhớ quy tắc viết từ trái sang phải nhé!"
+}
+`;
+
+      const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
+      const url = `https://api.deepseek.com/chat/completions`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentKey
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.4
+        })
+      });
+
+      if (!response.ok) {
+        const errInfo = await response.json().catch(() => ({}));
+        const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+        throw new Error(errMessage);
+      }
+
+      const data = await response.json();
+      try {
+        const textOutput = data.choices[0].message.content;
+        const parsed = JSON.parse(textOutput.trim());
+        return parsed.analysis || 'Không có phản hồi từ AI.';
+      } catch (e) {
+        console.warn('Lỗi phân tích JSON từ DeepSeek phân tích lỗi viết:', e);
+        const textOutput = data.choices[0].message.content;
+        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0].trim()).analysis;
+        }
+        return textOutput.trim();
+      }
+    }
+    
     if (provider === 'openrouter') {
       const OPENROUTER_MODELS = [
         { id: 'qwen/qwen-2-7b-instruct:free', name: 'Alibaba Qwen 2 7B (Free)' },

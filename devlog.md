@@ -76,6 +76,15 @@
   - `deploy/js/writer.js` — Đồng bộ hóa logic `callWriteAiAnalysis()` phân nhánh provider để gửi yêu cầu phân tích nét viết chữ Hán qua OpenRouter.
   - `deploy/sw.js` — Nâng phiên bản cache Service Worker lên `hochan-v28`.
 
+#### 8. Tích hợp cổng kết nối AI DeepSeek (Trực tiếp - Siêu tốt tiếng Trung)
+- **Mô tả:** Tiếp tục tích hợp tùy chọn cổng kết nối trực tiếp DeepSeek sử dụng chính API Key cá nhân do giáo viên vừa khởi tạo trên nền tảng DeepSeek (được mã hóa Base64 để lưu trữ an toàn trong code). Người dùng có thể chọn DeepSeek làm cổng kết nối chính để gọi trực tiếp model `deepseek-chat` (V3) – một trong những model tiếng Trung thông minh nhất thế giới. Đã đồng bộ tính năng DeepSeek qua cả 3 mảng: Chat học tập, Luyện phát âm và Sửa nét viết.
+- **Files thay đổi:**
+  - `deploy/index.html` — Bổ sung tùy chọn `deepseek` vào dropdown `#aiProviderSelect` và tăng mã phiên bản scripts.
+  - `deploy/js/core.js` — Định nghĩa `DEFAULT_DEEPSEEK_KEY_B64` chứa khóa DeepSeek mới, thêm hàm `getDeepSeekKey()`.
+  - `deploy/js/aichat.js` — Cài đặt biến `deepseekKey` và cấu hình phân nhánh `callDeepSeekAPI()`, `callDeepSeekAnalysis()` để thực hiện gửi nhận dữ liệu trực tiếp với API của DeepSeek.
+  - `deploy/js/writer.js` — Nâng cấp `callWriteAiAnalysis()` hỗ trợ phân nhánh xử lý và gửi prompt phân tích nét viết sang DeepSeek.
+  - `deploy/sw.js` — Nâng phiên bản cache tĩnh Service Worker lên `hochan-v29`.
+
 ### 🐛 Lỗi đã sửa
 
 #### 1. Khắc phục ReferenceError khi tách file script chạy tuần tự
