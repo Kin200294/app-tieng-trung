@@ -239,37 +239,6 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           selectedModel = localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen3-coder:free';
           modelSelect.value = selectedModel;
         }
-      } else if (aiProvider === 'deepseek') {
-        if (configTitle) configTitle.textContent = '🔑 Cài đặt DeepSeek (Trực tiếp)';
-        if (instructions) {
-          instructions.innerHTML = 'Để kết nối AI, bạn có thể sử dụng mã API Key DeepSeek mặc định hoặc lấy mã cá nhân tại <a href="https://platform.deepseek.com/" target="_blank" style="color: var(--gold-1); text-decoration: underline;">platform.deepseek.com</a> rồi dán vào bên dưới:';
-        }
-        if (keyInput) {
-          keyInput.value = window.getDeepSeekKey();
-        }
-        if (modelSelect) {
-          modelSelect.innerHTML = `
-            <option value="deepseek-chat" style="background:#1a1a2e; color:#e0e0e0;">🤖 DeepSeek Chat (V3 - Khuyên dùng)</option>
-          `;
-          selectedModel = localStorage.getItem(DEEPSEEK_MODEL_KEY) || 'deepseek-chat';
-          modelSelect.value = selectedModel;
-        }
-      } else if (aiProvider === 'siliconflow') {
-        if (configTitle) configTitle.textContent = '🔑 Cài đặt SiliconFlow (Free DeepSeek)';
-        if (instructions) {
-          instructions.innerHTML = 'Để kết nối AI, bạn hãy lấy mã API Key miễn phí tại <a href="https://cloud.siliconflow.cn/" target="_blank" style="color: var(--gold-1); text-decoration: underline;">cloud.siliconflow.cn</a> rồi dán vào bên dưới:';
-        }
-        if (keyInput) {
-          keyInput.value = siliconflowKey;
-        }
-        if (modelSelect) {
-          modelSelect.innerHTML = `
-            <option value="deepseek-ai/DeepSeek-V3" style="background:#1a1a2e; color:#e0e0e0;">🤖 DeepSeek V3 (SiliconFlow)</option>
-            <option value="deepseek-ai/DeepSeek-R1" style="background:#1a1a2e; color:#e0e0e0;">🧠 DeepSeek R1 (SiliconFlow)</option>
-          `;
-          selectedModel = localStorage.getItem(SILICONFLOW_MODEL_KEY) || 'deepseek-ai/DeepSeek-V3';
-          modelSelect.value = selectedModel;
-        }
       } else {
         if (configTitle) configTitle.textContent = '🔑 Cài đặt Google Gemini (Miễn phí)';
         if (instructions) {
@@ -299,8 +268,6 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         updateProviderUI();
         let providerLabel = 'Google Gemini';
         if (aiProvider === 'openrouter') providerLabel = 'OpenRouter';
-        else if (aiProvider === 'deepseek') providerLabel = 'DeepSeek';
-        else if (aiProvider === 'siliconflow') providerLabel = 'SiliconFlow';
         updateStatus(`Đã chuyển cổng kết nối: ${providerLabel}`);
       };
     }
@@ -318,12 +285,6 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         let modelName = selectedModel;
         if (aiProvider === 'openrouter') {
           const mInfo = OPENROUTER_MODELS.find(m => m.id === selectedModel);
-          if (mInfo) modelName = mInfo.name;
-        } else if (aiProvider === 'deepseek') {
-          const mInfo = DEEPSEEK_MODELS.find(m => m.id === selectedModel);
-          if (mInfo) modelName = mInfo.name;
-        } else if (aiProvider === 'siliconflow') {
-          const mInfo = SILICONFLOW_MODELS.find(m => m.id === selectedModel);
           if (mInfo) modelName = mInfo.name;
         } else {
           const mInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
@@ -363,31 +324,6 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           if ($('geminiModelSelect')) {
             selectedModel = $('geminiModelSelect').value;
             localStorage.setItem(OPENROUTER_MODEL_KEY, selectedModel);
-          }
-        } else if (aiProvider === 'deepseek') {
-          if (!val) {
-            localStorage.removeItem(DEEPSEEK_KEY_KEY);
-            val = window.getDeepSeekKey();
-            $('geminiApiKeyInput').value = val;
-          }
-          deepseekKey = val;
-          localStorage.setItem(DEEPSEEK_KEY_KEY, val);
-          if ($('geminiModelSelect')) {
-            selectedModel = $('geminiModelSelect').value;
-            localStorage.setItem(DEEPSEEK_MODEL_KEY, selectedModel);
-          }
-        } else if (aiProvider === 'siliconflow') {
-          if (!val) {
-            localStorage.removeItem(SILICONFLOW_KEY_KEY);
-            siliconflowKey = '';
-            $('geminiApiKeyInput').value = '';
-          } else {
-            siliconflowKey = val;
-            localStorage.setItem(SILICONFLOW_KEY_KEY, val);
-          }
-          if ($('geminiModelSelect')) {
-            selectedModel = $('geminiModelSelect').value;
-            localStorage.setItem(SILICONFLOW_MODEL_KEY, selectedModel);
           }
         } else {
           if (!val) {

@@ -95,20 +95,20 @@
   - Tự động thay đổi model sang `gemini-2.5-flash-lite` và lấy đúng key Gemini của hệ thống nếu rơi vào kịch bản dự phòng.
   - Tăng mã cache-busting trong `index.html` và Service Worker `sw.js` lên `hochan-v30`.
 
-#### 2. Cách ly các cổng kết nối AI và dừng chuyển đổi chéo nhà cung cấp
-- **Mô tả:** Nhằm đáp ứng yêu cầu của người dùng muốn giữ nguyên kết nối trong nhà cung cấp đã chọn (không tự động nhảy sang Gemini dự phòng), hệ thống đã cách ly hoàn toàn các API provider (Gemini, OpenRouter, SiliconFlow, DeepSeek). Việc xoay vòng model (model rotation) hoặc key chỉ diễn ra trong phạm vi các model của provider đó. Nếu lỗi xảy ra, hệ thống sẽ báo lỗi trực tiếp thay vì tự ý nhảy sang Gemini.
+#### 2. Cách ly các cổng kết nối AI và loại bỏ cổng DeepSeek và SiliconFlow
+- **Mô tả:** Theo yêu cầu của người dùng, hệ thống đã loại bỏ hoàn toàn 2 cổng kết nối `DeepSeek` (trực tiếp) và `SiliconFlow` (DeepSeek miễn phí) khỏi giao diện lựa chọn và mã nguồn để tập trung tối ưu cho hai cổng chính là Google Gemini và OpenRouter.
 - **Cách sửa:**
-  - Loại bỏ các khối try-catch fallback chéo nhà cung cấp trong `callGeminiAPI` và `callGeminiAnalysis` ở `aichat.js`.
-  - Bọc fetch và API requests của các hàm `callOpenRouterAPI`, `callSiliconFlowAPI`, `callOpenRouterAnalysis`, `callSiliconFlowAnalysis` bằng các khối try-catch nội bộ để xử lý xoay vòng model tự động trong chính nhà cung cấp đó.
-  - Tái cấu trúc hàm `callWriteAiAnalysis` trong `writer.js` để cô lập các nhánh xử lý (deepseek, openrouter, siliconflow) độc lập và tự xoay vòng model, thay vì chuyển đổi sang Gemini khi có lỗi.
+  - Xóa các thẻ `<option>` của DeepSeek và SiliconFlow trong dropdown select `#aiProviderSelect` ở `index.html`.
+  - Loại bỏ các nhánh cấu hình giao diện cài đặt và lưu API Key của DeepSeek và SiliconFlow trong `updateProviderUI` và `btnSaveApiKey.onclick` ở `aichat.js`.
+  - Loại bỏ hoàn toàn các khối xử lý logic API của DeepSeek và SiliconFlow trong hàm `callWriteAiAnalysis` ở `writer.js`.
   - Tích hợp tính năng xóa/reset API Key: Nếu người dùng xóa trống ô nhập Key và nhấn Lưu, hệ thống sẽ tự động xóa bản ghi trong `localStorage` và khôi phục lại mã API Key mặc định của hệ thống ngay lập tức.
-  - Tăng mã cache-busting trong `index.html` lên `v=31` cho `aichat.js` và `v=11` cho `writer.js`.
-  - Nâng cache Service Worker trong `sw.js` lên `hochan-v35`.
+  - Tăng mã cache-busting trong `index.html` lên `v=32` cho `aichat.js` và `v=12` cho `writer.js`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v36`.
 - **Files thay đổi:**
-  - `deploy/index.html` — Bump phiên bản file scripts.
-  - `deploy/js/aichat.js` — Cách ly định tuyến API, thêm try-catch và model rotation nội bộ cho các cổng.
-  - `deploy/js/writer.js` — Cách ly xử lý API nhận xét nét viết chữ Hán.
-  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v35`.
+  - `deploy/index.html` — Xóa 2 cổng kết nối khỏi dropdown và bump phiên bản file scripts.
+  - `deploy/js/aichat.js` — Xóa các nhánh UI và kiểm tra lưu key cho DeepSeek / SiliconFlow.
+  - `deploy/js/writer.js` — Dọn dẹp các khối code API thừa của DeepSeek / SiliconFlow.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v36`.
 
 #### 3. Tích hợp cổng kết nối SiliconFlow để chạy DeepSeek V3 và R1 hoàn toàn miễn phí
 - **Mô tả:** Do OpenRouter đã ngừng cung cấp các model DeepSeek miễn phí (trả về lỗi 404 Not Found), và tài khoản DeepSeek trực tiếp có số dư 0 USD báo lỗi `Insufficient Balance`, hệ thống đã bổ sung cổng kết nối SiliconFlow. Cổng này cho phép người dùng đăng ký miễn phí nhận 14 triệu tokens và chạy các model DeepSeek chính chủ mượt mà.
