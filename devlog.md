@@ -95,8 +95,22 @@
   - Tự động thay đổi model sang `gemini-2.5-flash-lite` và lấy đúng key Gemini của hệ thống nếu rơi vào kịch bản dự phòng.
   - Tăng mã cache-busting trong `index.html` và Service Worker `sw.js` lên `hochan-v30`.
 
-#### 2. Tích hợp DeepSeek Miễn phí qua cổng OpenRouter để tránh lỗi hết token (Insufficient Balance)
-- **Mô tả:** Do cổng API DeepSeek trực tiếp yêu cầu tài khoản trả phí phải nạp trước số dư (tối thiểu 2 USD) và tài khoản số dư 0 USD sẽ báo lỗi `Insufficient Balance`, hệ thống đã tích hợp các mô hình DeepSeek miễn phí thông qua OpenRouter để cho phép người dùng chạy DeepSeek hoàn toàn miễn phí bằng API key OpenRouter cá nhân.
+#### 2. Tích hợp cổng kết nối SiliconFlow để chạy DeepSeek V3 và R1 hoàn toàn miễn phí
+- **Mô tả:** Do OpenRouter đã ngừng cung cấp các model DeepSeek miễn phí (trả về lỗi 404 Not Found), và tài khoản DeepSeek trực tiếp có số dư 0 USD báo lỗi `Insufficient Balance`, hệ thống đã bổ sung cổng kết nối SiliconFlow. Cổng này cho phép người dùng đăng ký miễn phí nhận 14 triệu tokens và chạy các model DeepSeek chính chủ mượt mà.
+- **Cách sửa:**
+  - Thêm cổng SiliconFlow vào dropdown select `#aiProviderSelect` trong `index.html`.
+  - Định nghĩa hằng số lưu trữ cho SiliconFlow, đồng bộ danh sách model `deepseek-ai/DeepSeek-V3` và `deepseek-ai/DeepSeek-R1` trong cả `aichat.js` và `writer.js`.
+  - Viết các hàm kết nối API SiliconFlow `callSiliconFlowAPI` và `callSiliconFlowAnalysis` trỏ về endpoint `https://api.siliconflow.cn/v1/chat/completions`.
+  - Tăng mã cache-busting trong `index.html` cho `aichat.js` và `writer.js` lên `v=28` và `v=8`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v32`.
+- **Files thay đổi:**
+  - `deploy/index.html` — Thêm cổng SiliconFlow và bump version scripts.
+  - `deploy/js/aichat.js` — Định nghĩa model list, hàm gọi API và giao diện cài đặt cho SiliconFlow.
+  - `deploy/js/writer.js` — Thêm SiliconFlow vào hàm phân tích nét viết chữ Hán.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v32`.
+
+#### 3. Tích hợp DeepSeek Miễn phí qua cổng OpenRouter để tránh lỗi hết token (Insufficient Balance)
+- **Mô tả:** Do cổng API DeepSeek trực tiếp yêu cầu tài khoản trả phí phải nạp trước số dư (tối thiểu 2 USD) và tài khoản số dư 0 USD sẽ báo lỗi `Insufficient Balance`, hệ thống đã tích hợp các mô hình DeepSeek miễn phí thông qua OpenRouter để cho phép người dùng chạy DeepSeek hoàn toàn miễn phí bằng API key OpenRouter cá nhân. (Lưu ý: cổng này sau đó đã bị OpenRouter đóng bản free và thay thế bằng SiliconFlow).
 - **Cách sửa:**
   - Thêm model `deepseek/deepseek-chat:free` (DeepSeek V3 Free) và `deepseek/deepseek-r1:free` (DeepSeek R1 Free) vào danh sách model khả dụng của cổng OpenRouter trong cả `aichat.js` và `writer.js`.
   - Đổi nhãn cổng kết nối trong `index.html` thành `OpenRouter (Llama, Qwen & DeepSeek Miễn phí)`.
@@ -109,7 +123,7 @@
   - `deploy/js/writer.js` — Thêm các tùy chọn model DeepSeek Free vào OpenRouter block.
   - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v31`.
 
-#### 3. Khắc phục ReferenceError khi tách file script chạy tuần tự
+#### 4. Khắc phục ReferenceError khi tách file script chạy tuần tự
 - **Mô tả:** Sửa lỗi `ReferenceError: addPoints is not defined` tại `core.js` và lỗi liên đới `Cannot access 'TONE_MAP' before initialization` tại `toneOf` khiến ứng dụng bị trắng trang hoặc không hiển thị từ vựng (hiển thị 0 chữ) khi chạy qua Live Server hoặc cổng cục bộ.
 - **Cách sửa:**
   - Chuyển `addPoints` thành thuộc tính `null` ban đầu trong `window.HanziUI` ở `core.js`.

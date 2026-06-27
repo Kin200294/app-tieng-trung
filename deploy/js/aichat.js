@@ -18,6 +18,9 @@
   const DEEPSEEK_MODEL_KEY = 'hanzi-deepseek-model';
   const DEEPSEEK_KEY_KEY = 'hanzi-deepseek-api-key';
 
+  const SILICONFLOW_MODEL_KEY = 'hanzi-siliconflow-model';
+  const SILICONFLOW_KEY_KEY = 'hanzi-siliconflow-api-key';
+
   // --- Danh sách model miễn phí ---
   const AVAILABLE_MODELS = [
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', rpm: 15 },
@@ -37,21 +40,32 @@
     { id: 'deepseek-chat', name: 'DeepSeek Chat (V3)' }
   ];
 
+  const SILICONFLOW_MODELS = [
+    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3 (SiliconFlow)' },
+    { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1 (SiliconFlow)' }
+  ];
+
   // --- Trạng thái ---
   let aiProvider = window.getAIProvider();
   let geminiKey = window.getGeminiKey();
   let openrouterKey = window.getOpenRouterKey();
   let deepseekKey = window.getDeepSeekKey();
+  let siliconflowKey = localStorage.getItem(SILICONFLOW_KEY_KEY) || '';
+
+  // Xuất ra toàn cục để writer.js hoặc các file khác có thể lấy khóa
+  window.getSiliconFlowKey = () => siliconflowKey;
 
   function getSelectedModelKey() {
     if (aiProvider === 'openrouter') return OPENROUTER_MODEL_KEY;
     if (aiProvider === 'deepseek') return DEEPSEEK_MODEL_KEY;
+    if (aiProvider === 'siliconflow') return SILICONFLOW_MODEL_KEY;
     return MODEL_KEY;
   }
 
   function getDefaultModel() {
     if (aiProvider === 'openrouter') return 'deepseek/deepseek-chat:free';
     if (aiProvider === 'deepseek') return 'deepseek-chat';
+    if (aiProvider === 'siliconflow') return 'deepseek-ai/DeepSeek-V3';
     return 'gemini-2.5-flash-lite';
   }
 
@@ -242,6 +256,22 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           selectedModel = localStorage.getItem(DEEPSEEK_MODEL_KEY) || 'deepseek-chat';
           modelSelect.value = selectedModel;
         }
+      } else if (aiProvider === 'siliconflow') {
+        if (configTitle) configTitle.textContent = '🔑 Cài đặt SiliconFlow (Free DeepSeek)';
+        if (instructions) {
+          instructions.innerHTML = 'Để kết nối AI, bạn hãy lấy mã API Key miễn phí tại <a href="https://cloud.siliconflow.cn/" target="_blank" style="color: var(--gold-1); text-decoration: underline;">cloud.siliconflow.cn</a> rồi dán vào bên dưới:';
+        }
+        if (keyInput) {
+          keyInput.value = siliconflowKey;
+        }
+        if (modelSelect) {
+          modelSelect.innerHTML = `
+            <option value="deepseek-ai/DeepSeek-V3" style="background:#1a1a2e; color:#e0e0e0;">🤖 DeepSeek V3 (SiliconFlow)</option>
+            <option value="deepseek-ai/DeepSeek-R1" style="background:#1a1a2e; color:#e0e0e0;">🧠 DeepSeek R1 (SiliconFlow)</option>
+          `;
+          selectedModel = localStorage.getItem(SILICONFLOW_MODEL_KEY) || 'deepseek-ai/DeepSeek-V3';
+          modelSelect.value = selectedModel;
+        }
       } else {
         if (configTitle) configTitle.textContent = '🔑 Cài đặt Google Gemini (Miễn phí)';
         if (instructions) {
@@ -272,6 +302,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         let providerLabel = 'Google Gemini';
         if (aiProvider === 'openrouter') providerLabel = 'OpenRouter';
         else if (aiProvider === 'deepseek') providerLabel = 'DeepSeek';
+        else if (aiProvider === 'siliconflow') providerLabel = 'SiliconFlow';
         updateStatus(`Đã chuyển cổng kết nối: ${providerLabel}`);
       };
     }
@@ -292,6 +323,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           if (mInfo) modelName = mInfo.name;
         } else if (aiProvider === 'deepseek') {
           const mInfo = DEEPSEEK_MODELS.find(m => m.id === selectedModel);
+          if (mInfo) modelName = mInfo.name;
+        } else if (aiProvider === 'siliconflow') {
+          const mInfo = SILICONFLOW_MODELS.find(m => m.id === selectedModel);
           if (mInfo) modelName = mInfo.name;
         } else {
           const mInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
@@ -341,6 +375,13 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           if ($('geminiModelSelect')) {
             selectedModel = $('geminiModelSelect').value;
             localStorage.setItem(DEEPSEEK_MODEL_KEY, selectedModel);
+          }
+        } else if (aiProvider === 'siliconflow') {
+          siliconflowKey = val;
+          localStorage.setItem(SILICONFLOW_KEY_KEY, val);
+          if ($('geminiModelSelect')) {
+            selectedModel = $('geminiModelSelect').value;
+            localStorage.setItem(SILICONFLOW_MODEL_KEY, selectedModel);
           }
         } else {
           if (!val) {
@@ -858,6 +899,16 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         // Cho phép chạy tiếp xuống Gemini
       }
     }
+    if (aiProvider === 'siliconflow') {
+      try {
+        return await callSiliconFlowAPI(history, modelOverride, triedModels, triedKeys);
+      } catch (err) {
+        console.warn('SiliconFlow lỗi, chuyển sang Gemini dự phòng:', err);
+        updateStatus('SiliconFlow bận/lỗi → Đang tự động dùng Gemini dự phòng...', true);
+        await new Promise(r => setTimeout(r, 1500));
+        // Cho phép chạy tiếp xuống Gemini
+      }
+    }
     let currentModel = modelOverride || selectedModel;
     if (aiProvider !== 'gemini' || !currentModel.startsWith('gemini')) {
       currentModel = 'gemini-2.5-flash-lite';
@@ -1067,6 +1118,67 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       return JSON.parse(textOutput.trim());
     } catch (e) {
       console.warn('Lỗi phân tích JSON từ OpenRouter, thử trích xuất thủ công:', e);
+      const textOutput = data.choices[0].message.content;
+      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0].trim());
+      }
+      return {
+        hanzi: textOutput,
+        pinyin: '',
+        vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
+      };
+    }
+  }
+
+  // --- Gọi API SiliconFlow ---
+  async function callSiliconFlowAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(SILICONFLOW_MODEL_KEY) || 'deepseek-ai/DeepSeek-V3';
+    const currentKey = siliconflowKey || localStorage.getItem(SILICONFLOW_KEY_KEY) || '';
+
+    const maxContext = 8;
+    const recentHistory = history.slice(-maxContext);
+    const messages = [
+      { role: 'system', content: SYSTEM_INSTRUCTIONS }
+    ];
+
+    recentHistory.forEach(msg => {
+      if (msg.text.startsWith('❌')) return;
+      messages.push({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      });
+    });
+
+    const modelInfo = SILICONFLOW_MODELS.find(m => m.id === currentModel) || { name: currentModel };
+    updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
+
+    const url = 'https://api.siliconflow.cn/v1/chat/completions';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + currentKey
+      },
+      body: JSON.stringify({
+        model: currentModel,
+        messages: messages,
+        temperature: 0.4
+      })
+    });
+
+    if (!response.ok) {
+      const errInfo = await response.json().catch(() => ({}));
+      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+      throw new Error(errMessage);
+    }
+
+    const data = await response.json();
+    try {
+      const textOutput = data.choices[0].message.content;
+      return JSON.parse(textOutput.trim());
+    } catch (e) {
+      console.warn('Lỗi phân tích JSON từ SiliconFlow, thử trích xuất thủ công:', e);
       const textOutput = data.choices[0].message.content;
       const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
       if (jsonMatch) {
@@ -1298,6 +1410,14 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         return await callDeepSeekAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
       } catch (err) {
         console.warn('DeepSeek phân tích lỗi, chuyển sang Gemini dự phòng:', err);
+        // Cho phép chạy tiếp xuống Gemini
+      }
+    }
+    if (aiProvider === 'siliconflow') {
+      try {
+        return await callSiliconFlowAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+      } catch (err) {
+        console.warn('SiliconFlow phân tích lỗi, chuyển sang Gemini dự phòng:', err);
         // Cho phép chạy tiếp xuống Gemini
       }
     }
@@ -1545,6 +1665,80 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
       return parsed.analysis || 'Không có phản hồi từ AI.';
     } catch (e) {
       console.warn('Lỗi phân tích JSON từ OpenRouter phân tích lỗi phát âm:', e);
+      const textOutput = data.choices[0].message.content;
+      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0].trim()).analysis;
+      }
+      return textOutput.trim();
+    }
+  }
+
+  // --- Gọi API SiliconFlow để phân tích lỗi phát âm ---
+  async function callSiliconFlowAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(SILICONFLOW_MODEL_KEY) || 'deepseek-ai/DeepSeek-V3';
+    const currentKey = siliconflowKey || localStorage.getItem(SILICONFLOW_KEY_KEY) || '';
+    
+    // Lấy Pinyin của từ học sinh phát âm ra
+    let spokenPinyin = '';
+    try {
+      spokenPinyin = (window.pinyinPro && typeof window.pinyinPro.pinyin === 'function' && spoken && spoken.trim()) ? window.pinyinPro.pinyin(spoken.trim()) : '';
+    } catch (e) {
+      console.warn('pinyin-pro lỗi khi phân tích spoken text:', e);
+    }
+
+    const systemPrompt = `
+You are a warm, encouraging Chinese teacher. The student is practicing pronunciation.
+Compare the correct Chinese text (and its Pinyin) with what the student actually pronounced (and its recognized Pinyin), and analyze their pronunciation errors in clear, friendly Vietnamese.
+
+Specifically, look out for and guide the student on:
+1. Tones (Thanh điệu): Compare the correct Pinyin with the recognized Pinyin. Point out incorrect tones. Pay special attention to:
+   - Tone 1 (thanh 1 - âm cao ngang, ví dụ: ā) vs Tone 4 (thanh 4 - đi xuống mạnh dứt khoát, ví dụ: à).
+   - Tone 2 (thanh 2 - đi lên, ví dụ: á) vs Tone 3 (thanh 3 - đi xuống rồi đi lên nhẹ, ví dụ: ǎ).
+2. Initials/Finals (Phụ âm đầu/Vần): Guide them if they mispronounce difficult initials (e.g. z/c/s, zh/ch/sh, j/q/x) or finals (e.g. ian, iang, uan, uang).
+3. Missing words: If they missed some characters entirely.
+4. Encourage them.
+5. You MUST respond in a strictly structured JSON format with a single field:
+   - "analysis": Your feedback in Vietnamese. Keep it concise (maximum 3 sentences).
+
+Example of expected JSON format:
+{
+  "analysis": "Bạn phát âm khá tốt, nhưng lưu ý chữ '我' (wǒ) là thanh 3 (cần đọc trầm xuống rồi lên nhẹ), tránh đọc nhầm thành thanh 4 (wò). Hãy thử đọc lại nhé!"
+}
+`;
+
+    const prompt = `Correct Hanzi text: "${target}" (Pinyin: ${pinyin || ''})\nStudent spoken text: "${spoken || ''}" (Pinyin: ${spokenPinyin || ''})`;
+    const url = 'https://api.siliconflow.cn/v1/chat/completions';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + currentKey
+      },
+      body: JSON.stringify({
+        model: currentModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.4
+      })
+    });
+
+    if (!response.ok) {
+      const errInfo = await response.json().catch(() => ({}));
+      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+      throw new Error(errMessage);
+    }
+
+    const data = await response.json();
+    try {
+      const textOutput = data.choices[0].message.content;
+      const parsed = JSON.parse(textOutput.trim());
+      return parsed.analysis || 'Không có phản hồi từ AI.';
+    } catch (e) {
+      console.warn('Lỗi phân tích JSON từ SiliconFlow phân tích lỗi phát âm:', e);
       const textOutput = data.choices[0].message.content;
       const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
       if (jsonMatch) {
