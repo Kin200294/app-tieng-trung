@@ -354,6 +354,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         let val = $('geminiApiKeyInput').value.trim();
         if (aiProvider === 'openrouter') {
           if (!val) {
+            localStorage.removeItem(OPENROUTER_KEY_KEY);
             val = window.getOpenRouterKey();
             $('geminiApiKeyInput').value = val;
           }
@@ -365,6 +366,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           }
         } else if (aiProvider === 'deepseek') {
           if (!val) {
+            localStorage.removeItem(DEEPSEEK_KEY_KEY);
             val = window.getDeepSeekKey();
             $('geminiApiKeyInput').value = val;
           }
@@ -375,14 +377,21 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
             localStorage.setItem(DEEPSEEK_MODEL_KEY, selectedModel);
           }
         } else if (aiProvider === 'siliconflow') {
-          siliconflowKey = val;
-          localStorage.setItem(SILICONFLOW_KEY_KEY, val);
+          if (!val) {
+            localStorage.removeItem(SILICONFLOW_KEY_KEY);
+            siliconflowKey = '';
+            $('geminiApiKeyInput').value = '';
+          } else {
+            siliconflowKey = val;
+            localStorage.setItem(SILICONFLOW_KEY_KEY, val);
+          }
           if ($('geminiModelSelect')) {
             selectedModel = $('geminiModelSelect').value;
             localStorage.setItem(SILICONFLOW_MODEL_KEY, selectedModel);
           }
         } else {
           if (!val) {
+            localStorage.removeItem(API_KEY_KEY);
             val = window.getGeminiKey();
             $('geminiApiKeyInput').value = val;
           }

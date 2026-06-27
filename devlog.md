@@ -101,13 +101,14 @@
   - Loại bỏ các khối try-catch fallback chéo nhà cung cấp trong `callGeminiAPI` và `callGeminiAnalysis` ở `aichat.js`.
   - Bọc fetch và API requests của các hàm `callOpenRouterAPI`, `callSiliconFlowAPI`, `callOpenRouterAnalysis`, `callSiliconFlowAnalysis` bằng các khối try-catch nội bộ để xử lý xoay vòng model tự động trong chính nhà cung cấp đó.
   - Tái cấu trúc hàm `callWriteAiAnalysis` trong `writer.js` để cô lập các nhánh xử lý (deepseek, openrouter, siliconflow) độc lập và tự xoay vòng model, thay vì chuyển đổi sang Gemini khi có lỗi.
-  - Tăng mã cache-busting trong `index.html` lên `v=30` cho `aichat.js` và `v=10` cho `writer.js`.
-  - Nâng cache Service Worker trong `sw.js` lên `hochan-v34`.
+  - Tích hợp tính năng xóa/reset API Key: Nếu người dùng xóa trống ô nhập Key và nhấn Lưu, hệ thống sẽ tự động xóa bản ghi trong `localStorage` và khôi phục lại mã API Key mặc định của hệ thống ngay lập tức.
+  - Tăng mã cache-busting trong `index.html` lên `v=31` cho `aichat.js` và `v=11` cho `writer.js`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v35`.
 - **Files thay đổi:**
   - `deploy/index.html` — Bump phiên bản file scripts.
   - `deploy/js/aichat.js` — Cách ly định tuyến API, thêm try-catch và model rotation nội bộ cho các cổng.
   - `deploy/js/writer.js` — Cách ly xử lý API nhận xét nét viết chữ Hán.
-  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v34`.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v35`.
 
 #### 3. Tích hợp cổng kết nối SiliconFlow để chạy DeepSeek V3 và R1 hoàn toàn miễn phí
 - **Mô tả:** Do OpenRouter đã ngừng cung cấp các model DeepSeek miễn phí (trả về lỗi 404 Not Found), và tài khoản DeepSeek trực tiếp có số dư 0 USD báo lỗi `Insufficient Balance`, hệ thống đã bổ sung cổng kết nối SiliconFlow. Cổng này cho phép người dùng đăng ký miễn phí nhận 14 triệu tokens và chạy các model DeepSeek chính chủ mượt mà.
