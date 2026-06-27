@@ -376,6 +376,77 @@ Example of expected JSON format:
         throw err;
       }
     }
+
+    if (provider === 'huggingface') {
+      const HUGGINGFACE_MODELS = [
+        { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen 2.5 72B Instruct (HF)' },
+        { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct (HF)' },
+        { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B', name: 'DeepSeek R1 Distill Qwen 32B (HF)' }
+      ];
+      const currentModel = model || localStorage.getItem('hanzi-huggingface-model') || 'Qwen/Qwen2.5-72B-Instruct';
+      const currentKey = typeof window.getHuggingFaceKey === 'function' ? window.getHuggingFaceKey() : localStorage.getItem('hanzi-huggingface-api-key');
+
+      const systemPrompt = `
+You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
+Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
+The target character is: "${char}"
+The student made ${mistakes} mistakes while writing this character.
+
+Based on the character's structure and the number of mistakes:
+1. Explain the components/radicals (bộ thủ) of the character (e.g. for "ni" 'Ni', it has bộ Nhân đứng '亻' on the left and '尔' on the right).
+2. Give clear, actionable advice in Vietnamese on the stroke order (thứ tự nét) and stroke direction (hướng nét) to help them write correctly.
+3. Keep the feedback concise (maximum 3 sentences) so it fits in the popup.
+4. Encourage them.
+5. You MUST respond in a strictly structured JSON format with a single field:
+   - "analysis": Your feedback in Vietnamese.
+
+Example of expected JSON format:
+{
+  "analysis": "Chữ 'Ni' gồm bộ Nhân đứng (亻) bên trái và chữ '尔' bên phải. Bạn hãy lưu ý viết bộ Nhân đứng trước (phẩy rồi sổ), sau đó viết chữ '尔' (phẩy, ngang móc, phẩy, cong móc và hai nét chấm). Hãy cố gắng nhớ quy tắc viết từ trái sang phải nhé!"
+}
+`;
+
+      const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
+      const url = 'https://api-inference.huggingface.co/models/' + currentModel + '/v1/chat/completions';
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + currentKey
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.4
+          })
+        });
+
+        if (!response.ok) {
+          const errInfo = await response.json().catch(() => ({}));
+          const errMessage = errInfo.error?.message || errInfo.error || `HTTP error ${response.status}`;
+          throw new Error(errMessage);
+        }
+
+        const data = await response.json();
+        const textOutput = data.choices[0].message.content;
+        const parsed = JSON.parse(textOutput.trim());
+        return parsed.analysis || 'Không có phản hồi từ AI.';
+      } catch (err) {
+        console.warn(`Lỗi phân tích nét viết chữ model ${currentModel} trên Hugging Face:`, err);
+        triedModels.push(currentModel);
+        const nextModel = HUGGINGFACE_MODELS.find(m => !triedModels.includes(m.id));
+        if (nextModel) {
+          localStorage.setItem('hanzi-huggingface-model', nextModel.id);
+          await new Promise(r => setTimeout(r, 1000));
+          return callWriteAiAnalysis(char, mistakes, currentKey, nextModel.id, triedModels, triedKeys);
+        }
+        throw err;
+      }
+    }
     const AVAILABLE_MODELS = [
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
       { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },

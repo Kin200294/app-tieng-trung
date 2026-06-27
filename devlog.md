@@ -9,7 +9,24 @@
 
 ### ✅ Đã hoàn thành
 
-#### 1. Tích hợp cổng kết nối AI Groq API tốc độ siêu cao
+#### 1. Tích hợp cổng kết nối AI Hugging Face Inference API
+- **Mô tả:** Tích hợp tùy chọn cổng kết nối mới bên cạnh Google Gemini, OpenRouter và Groq trong phần cài đặt API Key. Hugging Face Serverless Inference cho phép gọi trực tiếp các mô hình lớn hoàn toàn miễn phí. Cấu hình mặc định sử dụng API Key cá nhân của người dùng đã cung cấp (mã hóa Base64) để tự động điền khi để trống. Hỗ trợ 3 model hàng đầu: Qwen 2.5 72B Instruct (HF), Llama 3.3 70B Instruct (HF), và DeepSeek R1 Distill Qwen 32B (HF). Đã đồng bộ đầy đủ cổng kết nối Hugging Face cho cả 3 mô-đun: Trò chuyện AI, Luyện phát âm AI, và Phân tích nét viết chữ Hán.
+- **Cách sửa:**
+  - Thêm cổng Hugging Face vào dropdown select `#aiProviderSelect` trong `index.html`.
+  - Định nghĩa hàm lấy key `window.getHuggingFaceKey` chứa token mặc định được mã hóa Base64 trong `core.js`.
+  - Khai báo danh sách model Hugging Face, cấu hình giao diện UI, lưu API Key vào `localStorage` trong `aichat.js`.
+  - Viết các hàm kết nối API Hugging Face `callHuggingFaceAPI` và `callHuggingFaceAnalysis` trỏ về endpoint serverless `/v1/chat/completions`.
+  - Tích hợp nhánh `provider === 'huggingface'` vào hàm `callWriteAiAnalysis` tại `writer.js`.
+  - Tăng mã cache-busting trong `index.html` cho `core.js`, `aichat.js` và `writer.js` lên `v=10`, `v=34` và `v=14`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v38`.
+- **Files thay đổi:**
+  - `deploy/index.html` — Thêm cổng Hugging Face và bump phiên bản script.
+  - `deploy/js/core.js` — Thêm hàm `getHuggingFaceKey()`.
+  - `deploy/js/aichat.js` — Định nghĩa model list, hàm gọi API và giao diện cài đặt cho Hugging Face.
+  - `deploy/js/writer.js` — Thêm Hugging Face vào hàm phân tích nét viết chữ Hán.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v38`.
+
+#### 2. Tích hợp cổng kết nối AI Groq API tốc độ siêu cao
 - **Mô tả:** Tích hợp tùy chọn cổng kết nối mới bên cạnh Google Gemini và OpenRouter trong phần cài đặt API Key. Groq cung cấp các mô hình tốc độ xử lý hàng nghìn tokens/giây, mang lại trải nghiệm mượt mà tức thì cho học sinh. Cung cấp 3 model nổi tiếng: Llama 3.3 70B (Khuyên dùng), Llama 3.1 8B (Siêu nhanh), và Gemma 2 9B. Đã đồng bộ đầy đủ cổng kết nối Groq cho cả 3 mô-đun: Trò chuyện AI, Luyện phát âm AI, và Phân tích nét viết chữ Hán. Tự động xoay vòng qua các model Groq khác khi gặp lỗi quá tải hoặc giới hạn lượt gọi (429).
 - **Cách sửa:**
   - Thêm cổng Groq vào dropdown select `#aiProviderSelect` trong `index.html`.

@@ -17,6 +17,9 @@
   
   const GROQ_MODEL_KEY = 'hanzi-groq-model';
   const GROQ_KEY_KEY = 'hanzi-groq-api-key';
+  
+  const HUGGINGFACE_MODEL_KEY = 'hanzi-huggingface-model';
+  const HUGGINGFACE_KEY_KEY = 'hanzi-huggingface-api-key';
 
   // --- Danh sách model miễn phí ---
   const AVAILABLE_MODELS = [
@@ -38,18 +41,27 @@
     { id: 'gemma2-9b-it', name: 'Gemma 2 9B (Groq)' }
   ];
 
+  const HUGGINGFACE_MODELS = [
+    { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen 2.5 72B Instruct (HF)' },
+    { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct (HF)' },
+    { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B', name: 'DeepSeek R1 Distill Qwen 32B (HF)' }
+  ];
+
   // --- Trạng thái ---
   let aiProvider = window.getAIProvider();
   let geminiKey = window.getGeminiKey();
   let openrouterKey = window.getOpenRouterKey();
   let groqKey = window.getGroqKey();
+  let huggingfaceKey = window.getHuggingFaceKey();
 
   // Xuất ra toàn cục để writer.js hoặc các file khác có thể lấy khóa
   window.getGroqKey = () => groqKey;
+  window.getHuggingFaceKey = () => huggingfaceKey;
 
   function getSelectedModelKey() {
     if (aiProvider === 'openrouter') return OPENROUTER_MODEL_KEY;
     if (aiProvider === 'groq') return GROQ_MODEL_KEY;
+    if (aiProvider === 'huggingface') return HUGGINGFACE_MODEL_KEY;
     return MODEL_KEY;
   }
 
@@ -248,6 +260,23 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           selectedModel = localStorage.getItem(GROQ_MODEL_KEY) || 'llama-3.3-70b-versatile';
           modelSelect.value = selectedModel;
         }
+      } else if (aiProvider === 'huggingface') {
+        if (configTitle) configTitle.textContent = '🔑 Cài đặt Hugging Face API';
+        if (instructions) {
+          instructions.innerHTML = 'Để kết nối AI, bạn có thể dùng mã API Token mặc định hoặc lấy mã cá nhân tại <a href="https://huggingface.co/settings/tokens" target="_blank" style="color: var(--gold-1); text-decoration: underline;">huggingface.co/settings/tokens</a> rồi dán vào bên dưới:';
+        }
+        if (keyInput) {
+          keyInput.value = window.getHuggingFaceKey();
+        }
+        if (modelSelect) {
+          modelSelect.innerHTML = `
+            <option value="Qwen/Qwen2.5-72B-Instruct" style="background:#1a1a2e; color:#e0e0e0;">🤖 Qwen 2.5 72B Instruct (HF - Khuyên dùng)</option>
+            <option value="meta-llama/Llama-3.3-70B-Instruct" style="background:#1a1a2e; color:#e0e0e0;">🧠 Llama 3.3 70B Instruct (HF)</option>
+            <option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B" style="background:#1a1a2e; color:#e0e0e0;">💡 DeepSeek R1 Distill Qwen 32B (HF)</option>
+          `;
+          selectedModel = localStorage.getItem(HUGGINGFACE_MODEL_KEY) || 'Qwen/Qwen2.5-72B-Instruct';
+          modelSelect.value = selectedModel;
+        }
       } else {
         if (configTitle) configTitle.textContent = '🔑 Cài đặt Google Gemini (Miễn phí)';
         if (instructions) {
@@ -278,6 +307,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         let providerLabel = 'Google Gemini';
         if (aiProvider === 'openrouter') providerLabel = 'OpenRouter';
         else if (aiProvider === 'groq') providerLabel = 'Groq API';
+        else if (aiProvider === 'huggingface') providerLabel = 'Hugging Face';
         updateStatus(`Đã chuyển cổng kết nối: ${providerLabel}`);
       };
     }
@@ -298,6 +328,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           if (mInfo) modelName = mInfo.name;
         } else if (aiProvider === 'groq') {
           const mInfo = GROQ_MODELS.find(m => m.id === selectedModel);
+          if (mInfo) modelName = mInfo.name;
+        } else if (aiProvider === 'huggingface') {
+          const mInfo = HUGGINGFACE_MODELS.find(m => m.id === selectedModel);
           if (mInfo) modelName = mInfo.name;
         } else {
           const mInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
@@ -350,6 +383,18 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           if ($('geminiModelSelect')) {
             selectedModel = $('geminiModelSelect').value;
             localStorage.setItem(GROQ_MODEL_KEY, selectedModel);
+          }
+        } else if (aiProvider === 'huggingface') {
+          if (!val) {
+            localStorage.removeItem(HUGGINGFACE_KEY_KEY);
+            val = window.getHuggingFaceKey();
+            $('geminiApiKeyInput').value = val;
+          }
+          huggingfaceKey = val;
+          localStorage.setItem(HUGGINGFACE_KEY_KEY, val);
+          if ($('geminiModelSelect')) {
+            selectedModel = $('geminiModelSelect').value;
+            localStorage.setItem(HUGGINGFACE_MODEL_KEY, selectedModel);
           }
         } else {
           if (!val) {
@@ -854,6 +899,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     if (aiProvider === 'groq') {
       return await callGroqAPI(history, modelOverride, triedModels, triedKeys);
     }
+    if (aiProvider === 'huggingface') {
+      return await callHuggingFaceAPI(history, modelOverride, triedModels, triedKeys);
+    }
     let currentModel = modelOverride || selectedModel;
     if (aiProvider !== 'gemini' || !currentModel.startsWith('gemini')) {
       currentModel = 'gemini-2.5-flash-lite';
@@ -1163,6 +1211,88 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     }
   }
 
+  // --- Gọi API Hugging Face ---
+  async function callHuggingFaceAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(HUGGINGFACE_MODEL_KEY) || 'Qwen/Qwen2.5-72B-Instruct';
+    const currentKey = huggingfaceKey || window.getHuggingFaceKey();
+
+    if (!currentKey) {
+      throw new Error('Chưa cấu hình API Key cho Hugging Face.');
+    }
+
+    const maxContext = 8;
+    const recentHistory = history.slice(-maxContext);
+    const messages = [
+      { role: 'system', content: SYSTEM_INSTRUCTIONS }
+    ];
+
+    recentHistory.forEach(msg => {
+      if (msg.text.startsWith('❌')) return;
+      messages.push({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      });
+    });
+
+    const modelInfo = HUGGINGFACE_MODELS.find(m => m.id === currentModel) || { name: currentModel };
+    updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
+
+    const url = 'https://api-inference.huggingface.co/models/' + currentModel + '/v1/chat/completions';
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentKey
+        },
+        body: JSON.stringify({
+          messages: messages,
+          temperature: 0.4
+        })
+      });
+
+      if (!response.ok) {
+        const errInfo = await response.json().catch(() => ({}));
+        const errMessage = errInfo.error?.message || errInfo.error || `HTTP error ${response.status}`;
+        throw new Error(errMessage);
+      }
+
+      const data = await response.json();
+      try {
+        const textOutput = data.choices[0].message.content;
+        return JSON.parse(textOutput.trim());
+      } catch (e) {
+        console.warn('Lỗi phân tích JSON từ Hugging Face, thử trích xuất thủ công:', e);
+        const textOutput = data.choices[0].message.content;
+        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0].trim());
+        }
+        return {
+          hanzi: textOutput,
+          pinyin: '',
+          vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
+        };
+      }
+    } catch (err) {
+      console.warn(`Lỗi khi gọi model ${currentModel} trên Hugging Face:`, err);
+      triedModels.push(currentModel);
+      const nextModel = HUGGINGFACE_MODELS.find(m => !triedModels.includes(m.id));
+      if (nextModel) {
+        updateStatus(`Hugging Face model bận → Chuyển sang ${nextModel.name}...`, true);
+        await new Promise(r => setTimeout(r, 1000));
+        
+        selectedModel = nextModel.id;
+        localStorage.setItem(HUGGINGFACE_MODEL_KEY, nextModel.id);
+        if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
+        
+        return callHuggingFaceAPI(history, nextModel.id, triedModels, triedKeys);
+      }
+      throw new Error(`Hugging Face lỗi: ${err.message}`);
+    }
+  }
+
   // --- Giao diện vẽ tin nhắn ---
   function renderChatMessages() {
     const stage = $('aichatMessages');
@@ -1312,6 +1442,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     }
     if (aiProvider === 'groq') {
       return await callGroqAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+    }
+    if (aiProvider === 'huggingface') {
+      return await callHuggingFaceAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
     }
     if (!geminiKey) {
       geminiKey = window.getGeminiKey();
@@ -1660,6 +1793,98 @@ Example of expected JSON format:
         return callGroqAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
       }
       throw new Error(`Groq lỗi: ${err.message}`);
+    }
+  }
+
+  // --- Gọi API Hugging Face để phân tích lỗi phát âm ---
+  async function callHuggingFaceAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(HUGGINGFACE_MODEL_KEY) || 'Qwen/Qwen2.5-72B-Instruct';
+    const currentKey = huggingfaceKey || window.getHuggingFaceKey();
+
+    if (!currentKey) {
+      throw new Error('Chưa cấu hình API Key cho Hugging Face.');
+    }
+
+    // Lấy Pinyin của từ học sinh phát âm ra
+    let spokenPinyin = '';
+    try {
+      spokenPinyin = (window.pinyinPro && typeof window.pinyinPro.pinyin === 'function' && spoken && spoken.trim()) ? window.pinyinPro.pinyin(spoken.trim()) : '';
+    } catch (e) {
+      console.warn('pinyin-pro lỗi khi phân tích spoken text:', e);
+    }
+
+    const systemPrompt = `
+You are a warm, encouraging Chinese teacher. The student is practicing pronunciation.
+Compare the correct Chinese text (and its Pinyin) with what the student actually pronounced (and its recognized Pinyin), and analyze their pronunciation errors in clear, friendly Vietnamese.
+
+Specifically, look out for and guide the student on:
+1. Tones (Thanh điệu): Compare the correct Pinyin with the recognized Pinyin. Point out incorrect tones. Pay special attention to:
+   - Tone 1 (thanh 1 - âm cao ngang, ví dụ: ā) vs Tone 4 (thanh 4 - đi xuống mạnh dứt khoát, ví dụ: à).
+   - Tone 2 (thanh 2 - đi lên, ví dụ: á) vs Tone 3 (thanh 3 - đi xuống rồi đi lên nhẹ, ví dụ: ǎ).
+2. Initials/Finals (Phụ âm đầu/Vần): Guide them if they mispronounce difficult initials (e.g. z/c/s, zh/ch/sh, j/q/x) or finals (e.g. ian, iang, uan, uang).
+3. Homophones (Chữ đồng âm): If the recognized Pinyin is identical or close but characters differ (e.g. 'shì' recognized as '事' instead of '是'), praise their pronunciation as correct and explain it is just a homophone.
+4. Keep the feedback concise (maximum 3 sentences).
+5. You MUST respond in a strictly structured JSON format with a single field:
+   - "analysis": Your feedback in Vietnamese.
+
+Example of expected JSON format:
+{
+  "analysis": "Bạn phát âm khá tốt, nhưng lưu ý chữ '我' (wǒ) là thanh 3 (cần đọc trầm xuống rồi lên nhẹ), tránh đọc nhầm thành thanh 4 (wò). Hãy thử đọc lại nhé!"
+}
+`;
+
+    const prompt = `Correct Hanzi text: "${target}" (Pinyin: ${pinyin || ''})\nStudent spoken text: "${spoken || ''}" (Pinyin: ${spokenPinyin || ''})`;
+    const url = 'https://api-inference.huggingface.co/models/' + currentModel + '/v1/chat/completions';
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + currentKey
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.2
+        })
+      });
+
+      if (!response.ok) {
+        const errInfo = await response.json().catch(() => ({}));
+        const errMessage = errInfo.error?.message || errInfo.error || `HTTP error ${response.status}`;
+        throw new Error(errMessage);
+      }
+
+      const data = await response.json();
+      try {
+        const textOutput = data.choices[0].message.content;
+        const parsed = JSON.parse(textOutput.trim());
+        return parsed.analysis || 'Không có phản hồi từ AI.';
+      } catch (e) {
+        console.warn('Lỗi phân tích JSON từ Hugging Face phân tích lỗi phát âm:', e);
+        const textOutput = data.choices[0].message.content;
+        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0].trim()).analysis;
+        }
+        return textOutput.trim();
+      }
+    } catch (err) {
+      console.warn(`Lỗi phân tích phát âm model ${currentModel} trên Hugging Face:`, err);
+      triedModels.push(currentModel);
+      const nextModel = HUGGINGFACE_MODELS.find(m => !triedModels.includes(m.id));
+      if (nextModel) {
+        selectedModel = nextModel.id;
+        localStorage.setItem(HUGGINGFACE_MODEL_KEY, nextModel.id);
+        if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
+        
+        await new Promise(r => setTimeout(r, 1000));
+        return callHuggingFaceAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
+      }
+      throw new Error(`Hugging Face lỗi: ${err.message}`);
     }
   }
 

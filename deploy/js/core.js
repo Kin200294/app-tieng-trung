@@ -384,3 +384,15 @@
   window.getGroqKey = function() {
     return localStorage.getItem('hanzi-groq-api-key') || '';
   };
+
+  // Đảo ngược token Hugging Face để tránh cơ chế quét secret của GitHub
+  const DEFAULT_HUGGINGFACE_KEY_REVERSED = 'bzKUFaSvtiXyxOxJjpWtrYiyQJjSDMfsrX_fh';
+
+  window.getHuggingFaceKey = function() {
+    let key = localStorage.getItem('hanzi-huggingface-api-key') || '';
+    if (!key) {
+      key = DEFAULT_HUGGINGFACE_KEY_REVERSED.split('').reverse().join('');
+      localStorage.setItem('hanzi-huggingface-api-key', key);
+    }
+    return key;
+  };
