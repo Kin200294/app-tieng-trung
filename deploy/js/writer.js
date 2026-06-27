@@ -305,8 +305,77 @@ Example of expected JSON format:
       }
     }
 
+    if (provider === 'groq') {
+      const GROQ_MODELS = [
+        { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Groq)' },
+        { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Groq)' },
+        { id: 'gemma2-9b-it', name: 'Gemma 2 9B (Groq)' }
+      ];
+      const currentModel = model || localStorage.getItem('hanzi-groq-model') || 'llama-3.3-70b-versatile';
+      const currentKey = typeof window.getGroqKey === 'function' ? window.getGroqKey() : localStorage.getItem('hanzi-groq-api-key');
 
+      const systemPrompt = `
+You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
+Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
+The target character is: "${char}"
+The student made ${mistakes} mistakes while writing this character.
 
+Based on the character's structure and the number of mistakes:
+1. Explain the components/radicals (bộ thủ) of the character (e.g. for "ni" 'Ni', it has bộ Nhân đứng '亻' on the left and '尔' on the right).
+2. Give clear, actionable advice in Vietnamese on the stroke order (thứ tự nét) and stroke direction (hướng nét) to help them write correctly.
+3. Keep the feedback concise (maximum 3 sentences) so it fits in the popup.
+4. Encourage them.
+5. You MUST respond in a strictly structured JSON format with a single field:
+   - "analysis": Your feedback in Vietnamese.
+
+Example of expected JSON format:
+{
+  "analysis": "Chữ 'Ni' gồm bộ Nhân đứng (亻) bên trái và chữ '尔' bên phải. Bạn hãy lưu ý viết bộ Nhân đứng trước (phẩy rồi sổ), sau đó viết chữ '尔' (phẩy, ngang móc, phẩy, cong móc và hai nét chấm). Hãy cố gắng nhớ quy tắc viết từ trái sang phải nhé!"
+}
+`;
+
+      const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
+      const url = 'https://api.groq.com/openai/v1/chat/completions';
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + currentKey
+          },
+          body: JSON.stringify({
+            model: currentModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.4
+          })
+        });
+
+        if (!response.ok) {
+          const errInfo = await response.json().catch(() => ({}));
+          const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+          throw new Error(errMessage);
+        }
+
+        const data = await response.json();
+        const textOutput = data.choices[0].message.content;
+        const parsed = JSON.parse(textOutput.trim());
+        return parsed.analysis || 'Không có phản hồi từ AI.';
+      } catch (err) {
+        console.warn(`Lỗi phân tích nét viết chữ model ${currentModel} trên Groq:`, err);
+        triedModels.push(currentModel);
+        const nextModel = GROQ_MODELS.find(m => !triedModels.includes(m.id));
+        if (nextModel) {
+          localStorage.setItem('hanzi-groq-model', nextModel.id);
+          await new Promise(r => setTimeout(r, 1000));
+          return callWriteAiAnalysis(char, mistakes, currentKey, nextModel.id, triedModels, triedKeys);
+        }
+        throw err;
+      }
+    }
     const AVAILABLE_MODELS = [
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
       { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },

@@ -9,7 +9,24 @@
 
 ### ✅ Đã hoàn thành
 
-#### 1. Nâng cấp thiết kế Typography, hoạt họa suy nghĩ & Cố định chiều cao khung Chat để cuộn tin nhắn
+#### 1. Tích hợp cổng kết nối AI Groq API tốc độ siêu cao
+- **Mô tả:** Tích hợp tùy chọn cổng kết nối mới bên cạnh Google Gemini và OpenRouter trong phần cài đặt API Key. Groq cung cấp các mô hình tốc độ xử lý hàng nghìn tokens/giây, mang lại trải nghiệm mượt mà tức thì cho học sinh. Cung cấp 3 model nổi tiếng: Llama 3.3 70B (Khuyên dùng), Llama 3.1 8B (Siêu nhanh), và Gemma 2 9B. Đã đồng bộ đầy đủ cổng kết nối Groq cho cả 3 mô-đun: Trò chuyện AI, Luyện phát âm AI, và Phân tích nét viết chữ Hán. Tự động xoay vòng qua các model Groq khác khi gặp lỗi quá tải hoặc giới hạn lượt gọi (429).
+- **Cách sửa:**
+  - Thêm cổng Groq vào dropdown select `#aiProviderSelect` trong `index.html`.
+  - Định nghĩa hàm lấy key `window.getGroqKey` trong `core.js`.
+  - Khai báo danh sách model Groq, cấu hình giao diện UI, lưu API Key vào `localStorage` trong `aichat.js`.
+  - Viết các hàm kết nối API Groq `callGroqAPI` và `callGroqAnalysis` trỏ về endpoint `https://api.groq.com/openai/v1/chat/completions`.
+  - Tích hợp nhánh `provider === 'groq'` vào hàm `callWriteAiAnalysis` tại `writer.js`.
+  - Tăng mã cache-busting trong `index.html` cho `core.js`, `aichat.js` và `writer.js` lên `v=9`, `v=33` và `v=13`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v37`.
+- **Files thay đổi:**
+  - `deploy/index.html` — Thêm cổng Groq và bump phiên bản script.
+  - `deploy/js/core.js` — Thêm hàm `getGroqKey()`.
+  - `deploy/js/aichat.js` — Định nghĩa model list, hàm gọi API và giao diện cài đặt cho Groq.
+  - `deploy/js/writer.js` — Thêm Groq vào hàm phân tích nét viết chữ Hán.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v37`.
+
+#### 2. Nâng cấp thiết kế Typography, hoạt họa suy nghĩ & Cố định chiều cao khung Chat để cuộn tin nhắn
 - **Mô tả:** Tích hợp font chữ sans-serif cao cấp `Outfit` và `Inter` từ Google Fonts giúp giao diện hiện đại hơn. Tích hợp bong bóng hoạt họa 3 dấu chấm nhấp nhô (Typing Indicator) kèm hiệu ứng phát sáng nhẹ nhàng khi AI đang nghĩ. Đặc biệt, loại bỏ thuộc tính `flex: 1` và cố định chiều cao `.aichat-window` ở mức `520px` trên desktop, buộc danh sách tin nhắn `.aichat-messages` tự động cuộn dọc (scroll-y) bên trong khung thay vì kéo dài trang web vô tận. Đồng thời nâng cấp font chữ cho chữ Hán trong bong bóng chat bằng Google Font `Noto Sans SC` và font hệ thống hiện đại (`PingFang SC`, `Microsoft YaHei`) thay cho font Serif/StoryScript truyền thống để hiển thị trơn tru, mịn đẹp.
 - **Files thay đổi:**
   - `deploy/index.html` — Tải font `Outfit`, `Inter` và `Noto Sans SC` từ Google Fonts, bump version cache CSS/JS.

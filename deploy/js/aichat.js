@@ -15,11 +15,8 @@
   const OPENROUTER_MODEL_KEY = 'hanzi-openrouter-model';
   const OPENROUTER_KEY_KEY = 'hanzi-openrouter-api-key';
   
-  const DEEPSEEK_MODEL_KEY = 'hanzi-deepseek-model';
-  const DEEPSEEK_KEY_KEY = 'hanzi-deepseek-api-key';
-
-  const SILICONFLOW_MODEL_KEY = 'hanzi-siliconflow-model';
-  const SILICONFLOW_KEY_KEY = 'hanzi-siliconflow-api-key';
+  const GROQ_MODEL_KEY = 'hanzi-groq-model';
+  const GROQ_KEY_KEY = 'hanzi-groq-api-key';
 
   // --- Danh sách model miễn phí ---
   const AVAILABLE_MODELS = [
@@ -35,29 +32,24 @@
     { id: 'google/gemma-4-31b-it:free', name: 'Google Gemma 4 31B (Free)' }
   ];
 
-  const DEEPSEEK_MODELS = [
-    { id: 'deepseek-chat', name: 'DeepSeek Chat (V3)' }
-  ];
-
-  const SILICONFLOW_MODELS = [
-    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3 (SiliconFlow)' },
-    { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1 (SiliconFlow)' }
+  const GROQ_MODELS = [
+    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Groq)' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (Groq)' },
+    { id: 'gemma2-9b-it', name: 'Gemma 2 9B (Groq)' }
   ];
 
   // --- Trạng thái ---
   let aiProvider = window.getAIProvider();
   let geminiKey = window.getGeminiKey();
   let openrouterKey = window.getOpenRouterKey();
-  let deepseekKey = window.getDeepSeekKey();
-  let siliconflowKey = localStorage.getItem(SILICONFLOW_KEY_KEY) || '';
+  let groqKey = window.getGroqKey();
 
   // Xuất ra toàn cục để writer.js hoặc các file khác có thể lấy khóa
-  window.getSiliconFlowKey = () => siliconflowKey;
+  window.getGroqKey = () => groqKey;
 
   function getSelectedModelKey() {
     if (aiProvider === 'openrouter') return OPENROUTER_MODEL_KEY;
-    if (aiProvider === 'deepseek') return DEEPSEEK_MODEL_KEY;
-    if (aiProvider === 'siliconflow') return SILICONFLOW_MODEL_KEY;
+    if (aiProvider === 'groq') return GROQ_MODEL_KEY;
     return MODEL_KEY;
   }
 
@@ -239,6 +231,23 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           selectedModel = localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen3-coder:free';
           modelSelect.value = selectedModel;
         }
+      } else if (aiProvider === 'groq') {
+        if (configTitle) configTitle.textContent = '🔑 Cài đặt Groq API';
+        if (instructions) {
+          instructions.innerHTML = 'Để kết nối AI, bạn hãy lấy mã API Key tại <a href="https://console.groq.com/" target="_blank" style="color: var(--gold-1); text-decoration: underline;">console.groq.com</a> rồi dán vào bên dưới:';
+        }
+        if (keyInput) {
+          keyInput.value = window.getGroqKey();
+        }
+        if (modelSelect) {
+          modelSelect.innerHTML = `
+            <option value="llama-3.3-70b-versatile" style="background:#1a1a2e; color:#e0e0e0;">🧠 Llama 3.3 70B (Groq - Khuyên dùng)</option>
+            <option value="llama-3.1-8b-instant" style="background:#1a1a2e; color:#e0e0e0;">⚡ Llama 3.1 8B (Groq - Siêu nhanh)</option>
+            <option value="gemma2-9b-it" style="background:#1a1a2e; color:#e0e0e0;">🤖 Gemma 2 9B (Groq)</option>
+          `;
+          selectedModel = localStorage.getItem(GROQ_MODEL_KEY) || 'llama-3.3-70b-versatile';
+          modelSelect.value = selectedModel;
+        }
       } else {
         if (configTitle) configTitle.textContent = '🔑 Cài đặt Google Gemini (Miễn phí)';
         if (instructions) {
@@ -268,6 +277,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         updateProviderUI();
         let providerLabel = 'Google Gemini';
         if (aiProvider === 'openrouter') providerLabel = 'OpenRouter';
+        else if (aiProvider === 'groq') providerLabel = 'Groq API';
         updateStatus(`Đã chuyển cổng kết nối: ${providerLabel}`);
       };
     }
@@ -285,6 +295,9 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         let modelName = selectedModel;
         if (aiProvider === 'openrouter') {
           const mInfo = OPENROUTER_MODELS.find(m => m.id === selectedModel);
+          if (mInfo) modelName = mInfo.name;
+        } else if (aiProvider === 'groq') {
+          const mInfo = GROQ_MODELS.find(m => m.id === selectedModel);
           if (mInfo) modelName = mInfo.name;
         } else {
           const mInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel);
@@ -324,6 +337,19 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
           if ($('geminiModelSelect')) {
             selectedModel = $('geminiModelSelect').value;
             localStorage.setItem(OPENROUTER_MODEL_KEY, selectedModel);
+          }
+        } else if (aiProvider === 'groq') {
+          if (!val) {
+            localStorage.removeItem(GROQ_KEY_KEY);
+            groqKey = '';
+            $('geminiApiKeyInput').value = '';
+          } else {
+            groqKey = val;
+            localStorage.setItem(GROQ_KEY_KEY, val);
+          }
+          if ($('geminiModelSelect')) {
+            selectedModel = $('geminiModelSelect').value;
+            localStorage.setItem(GROQ_MODEL_KEY, selectedModel);
           }
         } else {
           if (!val) {
@@ -825,11 +851,8 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     if (aiProvider === 'openrouter') {
       return await callOpenRouterAPI(history, modelOverride, triedModels, triedKeys);
     }
-    if (aiProvider === 'deepseek') {
-      return await callDeepSeekAPI(history, modelOverride, triedModels, triedKeys);
-    }
-    if (aiProvider === 'siliconflow') {
-      return await callSiliconFlowAPI(history, modelOverride, triedModels, triedKeys);
+    if (aiProvider === 'groq') {
+      return await callGroqAPI(history, modelOverride, triedModels, triedKeys);
     }
     let currentModel = modelOverride || selectedModel;
     if (aiProvider !== 'gemini' || !currentModel.startsWith('gemini')) {
@@ -1057,10 +1080,14 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     }
   }
 
-  // --- Gọi API SiliconFlow ---
-  async function callSiliconFlowAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
-    const currentModel = modelOverride || localStorage.getItem(SILICONFLOW_MODEL_KEY) || 'deepseek-ai/DeepSeek-V3';
-    const currentKey = siliconflowKey || localStorage.getItem(SILICONFLOW_KEY_KEY) || '';
+  // --- Gọi API Groq ---
+  async function callGroqAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(GROQ_MODEL_KEY) || 'llama-3.3-70b-versatile';
+    const currentKey = groqKey || window.getGroqKey();
+
+    if (!currentKey) {
+      throw new Error('Chưa cấu hình API Key cho Groq.');
+    }
 
     const maxContext = 8;
     const recentHistory = history.slice(-maxContext);
@@ -1076,10 +1103,10 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
       });
     });
 
-    const modelInfo = SILICONFLOW_MODELS.find(m => m.id === currentModel) || { name: currentModel };
+    const modelInfo = GROQ_MODELS.find(m => m.id === currentModel) || { name: currentModel };
     updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
 
-    const url = 'https://api.siliconflow.cn/v1/chat/completions';
+    const url = 'https://api.groq.com/openai/v1/chat/completions';
     
     try {
       const response = await fetch(url, {
@@ -1106,7 +1133,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         const textOutput = data.choices[0].message.content;
         return JSON.parse(textOutput.trim());
       } catch (e) {
-        console.warn('Lỗi phân tích JSON từ SiliconFlow, thử trích xuất thủ công:', e);
+        console.warn('Lỗi phân tích JSON từ Groq, thử trích xuất thủ công:', e);
         const textOutput = data.choices[0].message.content;
         const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
         if (jsonMatch) {
@@ -1119,81 +1146,20 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         };
       }
     } catch (err) {
-      console.warn(`Lỗi khi gọi model ${currentModel} trên SiliconFlow:`, err);
+      console.warn(`Lỗi khi gọi model ${currentModel} trên Groq:`, err);
       triedModels.push(currentModel);
-      const nextModel = SILICONFLOW_MODELS.find(m => !triedModels.includes(m.id));
+      const nextModel = GROQ_MODELS.find(m => !triedModels.includes(m.id));
       if (nextModel) {
-        updateStatus(`SiliconFlow model bận → Chuyển sang ${nextModel.name}...`, true);
+        updateStatus(`Groq model bận → Chuyển sang ${nextModel.name}...`, true);
         await new Promise(r => setTimeout(r, 1000));
         
         selectedModel = nextModel.id;
-        localStorage.setItem(SILICONFLOW_MODEL_KEY, nextModel.id);
+        localStorage.setItem(GROQ_MODEL_KEY, nextModel.id);
         if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
         
-        return callSiliconFlowAPI(history, nextModel.id, triedModels, triedKeys);
+        return callGroqAPI(history, nextModel.id, triedModels, triedKeys);
       }
-      throw new Error(`SiliconFlow lỗi: ${err.message}`);
-    }
-  }
-
-  // --- Gọi API DeepSeek ---
-  async function callDeepSeekAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
-    const currentModel = modelOverride || localStorage.getItem(DEEPSEEK_MODEL_KEY) || 'deepseek-chat';
-    const currentKey = deepseekKey || window.getDeepSeekKey();
-
-    const maxContext = 8;
-    const recentHistory = history.slice(-maxContext);
-    const messages = [
-      { role: 'system', content: SYSTEM_INSTRUCTIONS }
-    ];
-
-    recentHistory.forEach(msg => {
-      if (msg.text.startsWith('❌')) return;
-      messages.push({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      });
-    });
-
-    const modelInfo = DEEPSEEK_MODELS.find(m => m.id === currentModel) || { name: currentModel };
-    updateStatus(`🤖 Đang dùng ${modelInfo.name || currentModel}...`, true);
-
-    const url = 'https://api.deepseek.com/chat/completions';
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + currentKey
-      },
-      body: JSON.stringify({
-        model: currentModel,
-        messages: messages,
-        temperature: 0.4
-      })
-    });
-
-    if (!response.ok) {
-      const errInfo = await response.json().catch(() => ({}));
-      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-      throw new Error(errMessage);
-    }
-
-    const data = await response.json();
-    try {
-      const textOutput = data.choices[0].message.content;
-      return JSON.parse(textOutput.trim());
-    } catch (e) {
-      console.warn('Lỗi phân tích JSON từ DeepSeek, thử trích xuất thủ công:', e);
-      const textOutput = data.choices[0].message.content;
-      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0].trim());
-      }
-      return {
-        hanzi: textOutput,
-        pinyin: '',
-        vietnamese: 'Nhấn nút nghe để phát âm thử câu trả lời.'
-      };
+      throw new Error(`Groq lỗi: ${err.message}`);
     }
   }
 
@@ -1344,11 +1310,8 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
     if (aiProvider === 'openrouter') {
       return await callOpenRouterAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
     }
-    if (aiProvider === 'deepseek') {
-      return await callDeepSeekAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
-    }
-    if (aiProvider === 'siliconflow') {
-      return await callSiliconFlowAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+    if (aiProvider === 'groq') {
+      return await callGroqAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
     }
     if (!geminiKey) {
       geminiKey = window.getGeminiKey();
@@ -1607,11 +1570,15 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
     }
   }
 
-  // --- Gọi API SiliconFlow để phân tích lỗi phát âm ---
-  async function callSiliconFlowAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
-    const currentModel = modelOverride || localStorage.getItem(SILICONFLOW_MODEL_KEY) || 'deepseek-ai/DeepSeek-V3';
-    const currentKey = siliconflowKey || localStorage.getItem(SILICONFLOW_KEY_KEY) || '';
-    
+  // --- Gọi API Groq để phân tích lỗi phát âm ---
+  async function callGroqAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
+    const currentModel = modelOverride || localStorage.getItem(GROQ_MODEL_KEY) || 'llama-3.3-70b-versatile';
+    const currentKey = groqKey || window.getGroqKey();
+
+    if (!currentKey) {
+      throw new Error('Chưa cấu hình API Key cho Groq.');
+    }
+
     // Lấy Pinyin của từ học sinh phát âm ra
     let spokenPinyin = '';
     try {
@@ -1629,10 +1596,10 @@ Specifically, look out for and guide the student on:
    - Tone 1 (thanh 1 - âm cao ngang, ví dụ: ā) vs Tone 4 (thanh 4 - đi xuống mạnh dứt khoát, ví dụ: à).
    - Tone 2 (thanh 2 - đi lên, ví dụ: á) vs Tone 3 (thanh 3 - đi xuống rồi đi lên nhẹ, ví dụ: ǎ).
 2. Initials/Finals (Phụ âm đầu/Vần): Guide them if they mispronounce difficult initials (e.g. z/c/s, zh/ch/sh, j/q/x) or finals (e.g. ian, iang, uan, uang).
-3. Missing words: If they missed some characters entirely.
-4. Encourage them.
+3. Homophones (Chữ đồng âm): If the recognized Pinyin is identical or close but characters differ (e.g. 'shì' recognized as '事' instead of '是'), praise their pronunciation as correct and explain it is just a homophone.
+4. Keep the feedback concise (maximum 3 sentences).
 5. You MUST respond in a strictly structured JSON format with a single field:
-   - "analysis": Your feedback in Vietnamese. Keep it concise (maximum 3 sentences).
+   - "analysis": Your feedback in Vietnamese.
 
 Example of expected JSON format:
 {
@@ -1641,7 +1608,7 @@ Example of expected JSON format:
 `;
 
     const prompt = `Correct Hanzi text: "${target}" (Pinyin: ${pinyin || ''})\nStudent spoken text: "${spoken || ''}" (Pinyin: ${spokenPinyin || ''})`;
-    const url = 'https://api.siliconflow.cn/v1/chat/completions';
+    const url = 'https://api.groq.com/openai/v1/chat/completions';
 
     try {
       const response = await fetch(url, {
@@ -1656,7 +1623,7 @@ Example of expected JSON format:
             { role: 'system', content: systemPrompt },
             { role: 'user', content: prompt }
           ],
-          temperature: 0.4
+          temperature: 0.2
         })
       });
 
@@ -1672,7 +1639,7 @@ Example of expected JSON format:
         const parsed = JSON.parse(textOutput.trim());
         return parsed.analysis || 'Không có phản hồi từ AI.';
       } catch (e) {
-        console.warn('Lỗi phân tích JSON từ SiliconFlow phân tích lỗi phát âm:', e);
+        console.warn('Lỗi phân tích JSON từ Groq phân tích lỗi phát âm:', e);
         const textOutput = data.choices[0].message.content;
         const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
         if (jsonMatch) {
@@ -1681,100 +1648,18 @@ Example of expected JSON format:
         return textOutput.trim();
       }
     } catch (err) {
-      console.warn(`Lỗi phân tích phát âm model ${currentModel} trên SiliconFlow:`, err);
+      console.warn(`Lỗi phân tích phát âm model ${currentModel} trên Groq:`, err);
       triedModels.push(currentModel);
-      const nextModel = SILICONFLOW_MODELS.find(m => !triedModels.includes(m.id));
+      const nextModel = GROQ_MODELS.find(m => !triedModels.includes(m.id));
       if (nextModel) {
         selectedModel = nextModel.id;
-        localStorage.setItem(SILICONFLOW_MODEL_KEY, nextModel.id);
+        localStorage.setItem(GROQ_MODEL_KEY, nextModel.id);
         if ($('geminiModelSelect')) $('geminiModelSelect').value = nextModel.id;
         
         await new Promise(r => setTimeout(r, 1000));
-        return callSiliconFlowAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
+        return callGroqAnalysis(target, pinyin, spoken, nextModel.id, triedModels, triedKeys);
       }
-      throw new Error(`SiliconFlow lỗi: ${err.message}`);
-    }
-  }
-
-  // --- Gọi API DeepSeek để phân tích lỗi phát âm ---
-  async function callDeepSeekAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
-    const currentModel = modelOverride || localStorage.getItem(DEEPSEEK_MODEL_KEY) || 'deepseek-chat';
-    const currentKey = deepseekKey || window.getDeepSeekKey();
-    
-    // Lấy Pinyin của từ học sinh phát âm ra
-    let spokenPinyin = '';
-    try {
-      spokenPinyin = (window.pinyinPro && typeof window.pinyinPro.pinyin === 'function' && spoken && spoken.trim()) ? window.pinyinPro.pinyin(spoken.trim()) : '';
-    } catch (e) {
-      console.warn('pinyin-pro lỗi khi phân tích spoken text:', e);
-    }
-
-    const systemPrompt = `
-You are a warm, encouraging Chinese teacher. The student is practicing pronunciation.
-Compare the correct Chinese text (and its Pinyin) with what the student actually pronounced (and its recognized Pinyin), and analyze their pronunciation errors in clear, friendly Vietnamese.
-
-Specifically, look out for and guide the student on:
-1. Tones (Thanh điệu): Compare the correct Pinyin with the recognized Pinyin. Point out incorrect tones. Pay special attention to:
-   - Confusion between Tone 1 (flat, high) and short pronunciation.
-   - Tone 3 (low-dipping-and-rising) read as flat or like Vietnamese grave accent (dấu huyền) or question mark.
-   - Tone 4 (high-falling, sharp and short) read as flat or like Vietnamese grave accent (dấu huyền). Instruct the student to pronounce it forcefully and falling.
-2. Initials (Phụ âm đầu): Check if they missed aspiration (p, t, k, q, c, ch) or confused dental sibilants (z, c, s) with retroflexes (zh, ch, sh, r) or palatals (j, q, x).
-3. Finals (Vận mẫu / Vần): Check if they confused vowels (u vs ü, e vs o) or nasal endings (an vs ang, en vs eng, in vs ing).
-
-Important Rules for Analysis:
-- VERY IMPORTANT (Homophones / Chữ đồng âm): If the recognized Pinyin is identical or extremely close to the correct Pinyin, but the Chinese characters are different (due to Google Speech-to-Text recognizing a homophone, e.g., 'shì' recognized as '事' or '市' instead of '是'), praise the student that their pronunciation was actually correct and they did a great job, and explain that the system just outputted a homophone.
-- If they pronounced it very well (pronunciation and Pinyin match perfectly), praise them warmly and encourage them.
-- If the student spoke something completely unrelated or Web Speech API failed to recognize (spoken text is empty or garbled), politely ask them to try speaking again closer to the microphone, speak louder and more clearly, or try imitating the sample audio.
-- Keep the feedback extremely short, actionable, and friendly (maximum 2-3 sentences).
-- You MUST respond in a strictly structured JSON format with a single field:
-   - "analysis": Your feedback in Vietnamese.
-
-Example of expected JSON format:
-{
-  "analysis": "Tuyệt vời! Bạn phát âm rất chuẩn chữ này, từ thanh điệu đến phụ âm đầu đều rất tốt."
-}
-
-Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not include backticks, and do not add any explanation or other text.
-`;
-
-    const prompt = `Correct Chinese: "${target}" (Pinyin: "${pinyin}")\nStudent pronounced: "${spoken}"${spokenPinyin ? ` (Recognized Pinyin: "${spokenPinyin}")` : ''}`;
-    const url = 'https://api.deepseek.com/chat/completions';
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + currentKey
-      },
-      body: JSON.stringify({
-        model: currentModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.2
-      })
-    });
-
-    if (!response.ok) {
-      const errInfo = await response.json().catch(() => ({}));
-      const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-      throw new Error(errMessage);
-    }
-
-    const data = await response.json();
-    try {
-      const textOutput = data.choices[0].message.content;
-      const parsed = JSON.parse(textOutput.trim());
-      return parsed.analysis || 'Không có phản hồi từ AI.';
-    } catch (e) {
-      console.warn('Lỗi phân tích JSON từ DeepSeek phân tích lỗi phát âm:', e);
-      const textOutput = data.choices[0].message.content;
-      const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0].trim()).analysis;
-      }
-      return textOutput.trim();
+      throw new Error(`Groq lỗi: ${err.message}`);
     }
   }
 

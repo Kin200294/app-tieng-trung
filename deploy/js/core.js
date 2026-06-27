@@ -380,3 +380,7 @@
   window.getAIProvider = function() {
     return localStorage.getItem('hanzi-ai-provider') || 'gemini';
   };
+
+  window.getGroqKey = function() {
+    return localStorage.getItem('hanzi-groq-api-key') || '';
+  };
