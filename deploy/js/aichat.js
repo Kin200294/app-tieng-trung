@@ -835,12 +835,29 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   // --- Gọi API Gemini (có tự động chuyển model và API key khi bị rate-limit/lỗi) ---
   async function callGeminiAPI(history, modelOverride = null, triedModels = [], triedKeys = []) {
     if (aiProvider === 'openrouter') {
-      return callOpenRouterAPI(history, modelOverride, triedModels, triedKeys);
+      try {
+        return await callOpenRouterAPI(history, modelOverride, triedModels, triedKeys);
+      } catch (err) {
+        console.warn('OpenRouter lỗi, chuyển sang Gemini dự phòng:', err);
+        updateStatus('Cổng OpenRouter bận/lỗi → Đang tự động dùng Gemini dự phòng...', true);
+        await new Promise(r => setTimeout(r, 1500));
+        // Cho phép chạy tiếp xuống Gemini
+      }
     }
     if (aiProvider === 'deepseek') {
-      return callDeepSeekAPI(history, modelOverride, triedModels, triedKeys);
+      try {
+        return await callDeepSeekAPI(history, modelOverride, triedModels, triedKeys);
+      } catch (err) {
+        console.warn('DeepSeek lỗi, chuyển sang Gemini dự phòng:', err);
+        updateStatus('DeepSeek lỗi (Hết số dư/bận) → Đang dùng Gemini dự phòng...', true);
+        await new Promise(r => setTimeout(r, 1500));
+        // Cho phép chạy tiếp xuống Gemini
+      }
     }
-    const currentModel = modelOverride || selectedModel;
+    let currentModel = modelOverride || selectedModel;
+    if (aiProvider !== 'gemini' || !currentModel.startsWith('gemini')) {
+      currentModel = 'gemini-2.5-flash-lite';
+    }
     const currentKey = geminiKey;
     const contents = [];
     
@@ -1011,7 +1028,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + currentKey,
         'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
-        'X-Title': 'Học Chữ Hán App'
+        'X-Title': 'Hoc Chu Han App'
       },
       body: JSON.stringify({
         model: currentModel,
@@ -1265,16 +1282,29 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
   // --- Gọi API Gemini để phân tích lỗi phát âm (có tự động chuyển model và API key) ---
   async function callGeminiAnalysis(target, pinyin, spoken, modelOverride = null, triedModels = [], triedKeys = []) {
     if (aiProvider === 'openrouter') {
-      return callOpenRouterAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+      try {
+        return await callOpenRouterAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+      } catch (err) {
+        console.warn('OpenRouter phân tích lỗi, chuyển sang Gemini dự phòng:', err);
+        // Cho phép chạy tiếp xuống Gemini
+      }
     }
     if (aiProvider === 'deepseek') {
-      return callDeepSeekAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+      try {
+        return await callDeepSeekAnalysis(target, pinyin, spoken, modelOverride, triedModels, triedKeys);
+      } catch (err) {
+        console.warn('DeepSeek phân tích lỗi, chuyển sang Gemini dự phòng:', err);
+        // Cho phép chạy tiếp xuống Gemini
+      }
     }
     if (!geminiKey) {
       geminiKey = window.getGeminiKey();
     }
 
-    const currentModel = modelOverride || (selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : selectedModel);
+    let currentModel = modelOverride || (selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : selectedModel);
+    if (aiProvider !== 'gemini' || !currentModel.startsWith('gemini')) {
+      currentModel = 'gemini-2.5-flash-lite';
+    }
     const currentKey = geminiKey;
     
     // Lấy Pinyin của từ học sinh phát âm ra
@@ -1475,7 +1505,7 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks, do not 
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + currentKey,
         'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
-        'X-Title': 'Học Chữ Hán App'
+        'X-Title': 'Hoc Chu Han App'
       },
       body: JSON.stringify({
         model: currentModel,

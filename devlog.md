@@ -87,7 +87,15 @@
 
 ### 🐛 Lỗi đã sửa
 
-#### 1. Khắc phục ReferenceError khi tách file script chạy tuần tự
+#### 1. Khắc phục lỗi mã hóa header của OpenRouter và cài đặt Gemini Fallback dự phòng
+- **Mô tả:** Sửa lỗi `String contains non ISO-8859-1 code point` trên trình duyệt khi gửi tin nhắn qua OpenRouter. Thêm cơ chế tự động dự phòng sang Gemini khi OpenRouter hoặc DeepSeek gặp lỗi (như hết tiền, sai key, quá tải).
+- **Cách sửa:**
+  - Loại bỏ các ký tự tiếng Việt có dấu trong header `'X-Title'` (thay thành `'Hoc Chu Han App'`) ở cả `aichat.js` và `writer.js`.
+  - Bọc tất cả các hàm gọi API OpenRouter và DeepSeek bằng `try-catch`. Khi xảy ra lỗi, hệ thống sẽ log cảnh báo, cập nhật status và tự động chạy tiếp xuống phần gọi API của Google Gemini dự phòng.
+  - Tự động thay đổi model sang `gemini-2.5-flash-lite` và lấy đúng key Gemini của hệ thống nếu rơi vào kịch bản dự phòng.
+  - Tăng mã cache-busting trong `index.html` và Service Worker `sw.js` lên `hochan-v30`.
+
+#### 2. Khắc phục ReferenceError khi tách file script chạy tuần tự
 - **Mô tả:** Sửa lỗi `ReferenceError: addPoints is not defined` tại `core.js` và lỗi liên đới `Cannot access 'TONE_MAP' before initialization` tại `toneOf` khiến ứng dụng bị trắng trang hoặc không hiển thị từ vựng (hiển thị 0 chữ) khi chạy qua Live Server hoặc cổng cục bộ.
 - **Cách sửa:**
   - Chuyển `addPoints` thành thuộc tính `null` ban đầu trong `window.HanziUI` ở `core.js`.

@@ -147,7 +147,7 @@
     statusEl.textContent = 'Hãy viết nét tiếp theo...';
     statusEl.className = 'io-note';
     statusEl.style.color = '';
-
+ 
     hanziWriterInstance.quiz({
       onCorrectStroke: function(strokeData) {
         statusEl.textContent = '✓ Chính xác!';
@@ -230,17 +230,18 @@
     const provider = typeof window.getAIProvider === 'function' ? window.getAIProvider() : 'gemini';
     
     if (provider === 'deepseek') {
-      const currentModel = model || localStorage.getItem('hanzi-deepseek-model') || 'deepseek-chat';
-      const currentKey = typeof window.getDeepSeekKey === 'function' ? window.getDeepSeekKey() : apiKey;
+      try {
+        const currentModel = model || localStorage.getItem('hanzi-deepseek-model') || 'deepseek-chat';
+        const currentKey = typeof window.getDeepSeekKey === 'function' ? window.getDeepSeekKey() : apiKey;
 
-      const systemPrompt = `
+        const systemPrompt = `
 You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
 Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
 The target character is: "${char}"
 The student made ${mistakes} mistakes while writing this character.
 
 Based on the character's structure and the number of mistakes:
-1. Explain the components/radicals (bộ thủ) of the character (e.g. for "ni" '你', it has bộ Nhân đứng '亻' on the left and '尔' on the right).
+1. Explain the components/radicals (bộ thủ) of the character (e.g. for "ni" 'Ni', it has bộ Nhân đứng '亻' on the left and '尔' on the right).
 2. Give clear, actionable advice in Vietnamese on the stroke order (thứ tự nét) and stroke direction (hướng nét) to help them write correctly.
 3. Keep the feedback concise (maximum 3 sentences) so it fits in the popup.
 4. Encourage them.
@@ -253,64 +254,59 @@ Example of expected JSON format:
 }
 `;
 
-      const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
-      const url = `https://api.deepseek.com/chat/completions`;
+        const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
+        const url = `https://api.deepseek.com/chat/completions`;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + currentKey
-        },
-        body: JSON.stringify({
-          model: currentModel,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.4
-        })
-      });
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + currentKey
+          },
+          body: JSON.stringify({
+            model: currentModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.4
+          })
+        });
 
-      if (!response.ok) {
-        const errInfo = await response.json().catch(() => ({}));
-        const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-        throw new Error(errMessage);
-      }
+        if (!response.ok) {
+          const errInfo = await response.json().catch(() => ({}));
+          const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+          throw new Error(errMessage);
+        }
 
-      const data = await response.json();
-      try {
+        const data = await response.json();
         const textOutput = data.choices[0].message.content;
         const parsed = JSON.parse(textOutput.trim());
         return parsed.analysis || 'Không có phản hồi từ AI.';
-      } catch (e) {
-        console.warn('Lỗi phân tích JSON từ DeepSeek phân tích lỗi viết:', e);
-        const textOutput = data.choices[0].message.content;
-        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0].trim()).analysis;
-        }
-        return textOutput.trim();
+      } catch (err) {
+        console.warn('DeepSeek phân tích viết chữ lỗi, chuyển sang Gemini dự phòng:', err);
+        // Tự động chạy tiếp xuống khối code Gemini bên dưới
       }
     }
     
     if (provider === 'openrouter') {
-      const OPENROUTER_MODELS = [
-        { id: 'qwen/qwen-2-7b-instruct:free', name: 'Alibaba Qwen 2 7B (Free)' },
-        { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Meta Llama 3.1 8B (Free)' },
-        { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' }
-      ];
-      const currentModel = model || localStorage.getItem('hanzi-openrouter-model') || 'qwen/qwen-2-7b-instruct:free';
-      const currentKey = typeof window.getOpenRouterKey === 'function' ? window.getOpenRouterKey() : apiKey;
+      try {
+        const OPENROUTER_MODELS = [
+          { id: 'qwen/qwen-2-7b-instruct:free', name: 'Alibaba Qwen 2 7B (Free)' },
+          { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Meta Llama 3.1 8B (Free)' },
+          { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' }
+        ];
+        const currentModel = model || localStorage.getItem('hanzi-openrouter-model') || 'qwen/qwen-2-7b-instruct:free';
+        const currentKey = typeof window.getOpenRouterKey === 'function' ? window.getOpenRouterKey() : apiKey;
 
-      const systemPrompt = `
+        const systemPrompt = `
 You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
 Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
 The target character is: "${char}"
 The student made ${mistakes} mistakes while writing this character.
 
 Based on the character's structure and the number of mistakes:
-1. Explain the components/radicals (bộ thủ) of the character (e.g. for "你", it has bộ Nhân đứng '亻' on the left and '尔' on the right).
+1. Explain the components/radicals (bộ thủ) of the character (e.g. for "ni" 'Ni', it has bộ Nhân đứng '亻' on the left and '尔' on the right).
 2. Give clear, actionable advice in Vietnamese on the stroke order (thứ tự nét) and stroke direction (hướng nét) to help them write correctly.
 3. Keep the feedback concise (maximum 3 sentences) so it fits in the popup.
 4. Encourage them.
@@ -323,54 +319,48 @@ Example of expected JSON format:
 }
 `;
 
-      const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
-      const url = `https://openrouter.ai/api/v1/chat/completions`;
+        const prompt = `Target Chinese character: "${char}"\nNumber of stroke mistakes: ${mistakes}`;
+        const url = `https://openrouter.ai/api/v1/chat/completions`;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + currentKey,
-          'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
-          'X-Title': 'Học Chữ Hán App'
-        },
-        body: JSON.stringify({
-          model: currentModel,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.4
-        })
-      });
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + currentKey,
+            'HTTP-Referer': 'https://github.com/Kin200294/app-tieng-trung',
+            'X-Title': 'Hoc Chu Han App'
+          },
+          body: JSON.stringify({
+            model: currentModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.4
+          })
+        });
 
-      if (!response.ok) {
-        const errInfo = await response.json().catch(() => ({}));
-        const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
-        
-        triedModels.push(currentModel);
-        const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
-        if (nextModel) {
-          localStorage.setItem('hanzi-openrouter-model', nextModel.id);
-          await new Promise(r => setTimeout(r, 1000));
-          return callWriteAiAnalysis(char, mistakes, currentKey, nextModel.id, triedModels, triedKeys);
+        if (!response.ok) {
+          const errInfo = await response.json().catch(() => ({}));
+          const errMessage = errInfo.error?.message || `HTTP error ${response.status}`;
+          
+          triedModels.push(currentModel);
+          const nextModel = OPENROUTER_MODELS.find(m => !triedModels.includes(m.id));
+          if (nextModel) {
+            localStorage.setItem('hanzi-openrouter-model', nextModel.id);
+            await new Promise(r => setTimeout(r, 1000));
+            return callWriteAiAnalysis(char, mistakes, currentKey, nextModel.id, triedModels, triedKeys);
+          }
+          throw new Error(errMessage);
         }
-        throw new Error(errMessage);
-      }
 
-      const data = await response.json();
-      try {
+        const data = await response.json();
         const textOutput = data.choices[0].message.content;
         const parsed = JSON.parse(textOutput.trim());
         return parsed.analysis || 'Không có phản hồi từ AI.';
-      } catch (e) {
-        console.warn('Lỗi phân tích JSON từ OpenRouter phân tích lỗi viết:', e);
-        const textOutput = data.choices[0].message.content;
-        const jsonMatch = textOutput.match(/\{[\s\S]*?\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0].trim()).analysis;
-        }
-        return textOutput.trim();
+      } catch (err) {
+        console.warn('OpenRouter phân tích viết chữ lỗi, chuyển sang Gemini dự phòng:', err);
+        // Tự động chạy tiếp xuống khối code Gemini bên dưới
       }
     }
 
@@ -380,8 +370,15 @@ Example of expected JSON format:
       { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite' }
     ];
 
-    const currentModel = model || 'gemini-2.5-flash';
-    const currentKey = apiKey;
+    // Sử dụng Gemini key & model thực tế nếu rơi vào kịch bản fallback từ OpenRouter/DeepSeek
+    const currentModel = (provider === 'gemini')
+      ? (model || localStorage.getItem('hanzi-gemini-model') || 'gemini-2.5-flash-lite')
+      : (localStorage.getItem('hanzi-gemini-model') || 'gemini-2.5-flash-lite');
+    
+    const currentKey = (provider === 'gemini')
+      ? (apiKey || window.getGeminiKey())
+      : window.getGeminiKey();
+
     const systemPrompt = `
 You are a warm, encouraging Chinese teacher. The student is practicing writing Chinese characters.
 Analyze their writing process for the target character and give them helpful advice in friendly Vietnamese.
@@ -389,7 +386,7 @@ The target character is: "${char}"
 The student made ${mistakes} mistakes while writing this character.
 
 Based on the character's structure and the number of mistakes:
-1. Explain the components/radicals (bộ thủ) of the character (e.g. for "你", it has bộ Nhân đứng '亻' on the left and '尔' on the right).
+1. Explain the components/radicals (bộ thủ) of the character (e.g. for "ni" 'Ni', it has bộ Nhân đứng '亻' on the left and '尔' on the right).
 2. Give clear, actionable advice in Vietnamese on the stroke order (thứ tự nét) and stroke direction (hướng nét) to help them write correctly.
 3. Keep the feedback concise (maximum 3 sentences) so it fits in the popup.
 4. Encourage them.
