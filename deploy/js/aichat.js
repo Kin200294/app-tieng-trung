@@ -29,11 +29,10 @@
   ];
 
   const OPENROUTER_MODELS = [
-    { id: 'deepseek/deepseek-chat:free', name: 'DeepSeek V3 (Free - Khuyên dùng)' },
-    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free - Suy luận)' },
-    { id: 'qwen/qwen-2-7b-instruct:free', name: 'Alibaba Qwen 2 7B (Free)' },
-    { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Meta Llama 3.1 8B (Free)' },
-    { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' }
+    { id: 'qwen/qwen3-coder:free', name: 'Alibaba Qwen 3 Coder (Free - Tiếng Trung tốt nhất)' },
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Meta Llama 3.3 70B (Free)' },
+    { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Meta Llama 3.2 3B (Free)' },
+    { id: 'google/gemma-4-31b-it:free', name: 'Google Gemma 4 31B (Free)' }
   ];
 
   const DEEPSEEK_MODELS = [
@@ -63,7 +62,7 @@
   }
 
   function getDefaultModel() {
-    if (aiProvider === 'openrouter') return 'deepseek/deepseek-chat:free';
+    if (aiProvider === 'openrouter') return 'qwen/qwen3-coder:free';
     if (aiProvider === 'deepseek') return 'deepseek-chat';
     if (aiProvider === 'siliconflow') return 'deepseek-ai/DeepSeek-V3';
     return 'gemini-2.5-flash-lite';
@@ -232,13 +231,12 @@ Return ONLY the raw JSON string. Do not wrap it in markdown code blocks (\`\`\`j
         }
         if (modelSelect) {
           modelSelect.innerHTML = `
-            <option value="deepseek/deepseek-chat:free" style="background:#1a1a2e; color:#e0e0e0;">🤖 DeepSeek V3 (Free - Khuyên dùng)</option>
-            <option value="deepseek/deepseek-r1:free" style="background:#1a1a2e; color:#e0e0e0;">🧠 DeepSeek R1 (Free - Suy luận)</option>
-            <option value="qwen/qwen-2-7b-instruct:free" style="background:#1a1a2e; color:#e0e0e0;">🤖 Alibaba Qwen 2 7B (Free)</option>
-            <option value="meta-llama/llama-3.1-8b-instruct:free" style="background:#1a1a2e; color:#e0e0e0;">⚡ Meta Llama 3.1 8B (Free)</option>
-            <option value="google/gemma-2-9b-it:free" style="background:#1a1a2e; color:#e0e0e0;">🪶 Google Gemma 2 9B (Free)</option>
+            <option value="qwen/qwen3-coder:free" style="background:#1a1a2e; color:#e0e0e0;">🤖 Alibaba Qwen 3 Coder (Free - Khuyên dùng)</option>
+            <option value="meta-llama/llama-3.3-70b-instruct:free" style="background:#1a1a2e; color:#e0e0e0;">🧠 Meta Llama 3.3 70B (Free)</option>
+            <option value="meta-llama/llama-3.2-3b-instruct:free" style="background:#1a1a2e; color:#e0e0e0;">⚡ Meta Llama 3.2 3B (Free)</option>
+            <option value="google/gemma-4-31b-it:free" style="background:#1a1a2e; color:#e0e0e0;">🪶 Google Gemma 4 31B (Free)</option>
           `;
-          selectedModel = localStorage.getItem(OPENROUTER_MODEL_KEY) || 'deepseek/deepseek-chat:free';
+          selectedModel = localStorage.getItem(OPENROUTER_MODEL_KEY) || 'qwen/qwen3-coder:free';
           modelSelect.value = selectedModel;
         }
       } else if (aiProvider === 'deepseek') {

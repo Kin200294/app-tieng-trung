@@ -109,19 +109,18 @@
   - `deploy/js/writer.js` — Thêm SiliconFlow vào hàm phân tích nét viết chữ Hán.
   - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v32`.
 
-#### 3. Tích hợp DeepSeek Miễn phí qua cổng OpenRouter để tránh lỗi hết token (Insufficient Balance)
-- **Mô tả:** Do cổng API DeepSeek trực tiếp yêu cầu tài khoản trả phí phải nạp trước số dư (tối thiểu 2 USD) và tài khoản số dư 0 USD sẽ báo lỗi `Insufficient Balance`, hệ thống đã tích hợp các mô hình DeepSeek miễn phí thông qua OpenRouter để cho phép người dùng chạy DeepSeek hoàn toàn miễn phí bằng API key OpenRouter cá nhân. (Lưu ý: cổng này sau đó đã bị OpenRouter đóng bản free và thay thế bằng SiliconFlow).
+#### 3. Tích hợp các model Miễn phí qua cổng OpenRouter và loại bỏ các model hết hạn (404)
+- **Mô tả:** Do OpenRouter đã gỡ bỏ hoàn toàn phiên bản miễn phí của DeepSeek V3 và R1 (trả về lỗi 404), hệ thống đã cập nhật danh sách các model miễn phí mới nhất của OpenRouter vào ứng dụng để tránh lỗi kết nối và tự động fallback.
 - **Cách sửa:**
-  - Thêm model `deepseek/deepseek-chat:free` (DeepSeek V3 Free) và `deepseek/deepseek-r1:free` (DeepSeek R1 Free) vào danh sách model khả dụng của cổng OpenRouter trong cả `aichat.js` và `writer.js`.
-  - Đổi nhãn cổng kết nối trong `index.html` thành `OpenRouter (Llama, Qwen & DeepSeek Miễn phí)`.
-  - Cập nhật model mặc định khi chọn OpenRouter sang `deepseek/deepseek-chat:free`.
-  - Tăng mã cache-busting trong `index.html` cho `aichat.js` và `writer.js` lên `v=27` và `v=7`.
-  - Nâng cache Service Worker trong `sw.js` lên `hochan-v31`.
+  - Cập nhật danh sách model OpenRouter sang các dòng máy chủ đang hoạt động miễn phí thực tế: `qwen/qwen3-coder:free` (Alibaba Qwen 3 Coder - cực tốt tiếng Trung), `meta-llama/llama-3.3-70b-instruct:free`, `meta-llama/llama-3.2-3b-instruct:free` và `google/gemma-4-31b-it:free`.
+  - Thay thế model mặc định khi kết nối OpenRouter thành `qwen/qwen3-coder:free`.
+  - Tăng mã cache-busting trong `index.html` lên `v=29` cho `aichat.js` và `v=9` cho `writer.js`.
+  - Nâng cache Service Worker trong `sw.js` lên `hochan-v33`.
 - **Files thay đổi:**
-  - `deploy/index.html` — Đổi nhãn kết nối và bump version script.
-  - `deploy/js/aichat.js` — Thêm các tùy chọn model DeepSeek Free và cập nhật dropdown OpenRouter.
-  - `deploy/js/writer.js` — Thêm các tùy chọn model DeepSeek Free vào OpenRouter block.
-  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v31`.
+  - `deploy/index.html` — Bump phiên bản tập tin scripts.
+  - `deploy/js/aichat.js` — Thay thế danh sách model cũ bằng các model mới nhất và đổi default.
+  - `deploy/js/writer.js` — Cập nhật model list trong phân tích nét viết chữ.
+  - `deploy/sw.js` — Nâng cache Service Worker lên `hochan-v33`.
 
 #### 4. Khắc phục ReferenceError khi tách file script chạy tuần tự
 - **Mô tả:** Sửa lỗi `ReferenceError: addPoints is not defined` tại `core.js` và lỗi liên đới `Cannot access 'TONE_MAP' before initialization` tại `toneOf` khiến ứng dụng bị trắng trang hoặc không hiển thị từ vựng (hiển thị 0 chữ) khi chạy qua Live Server hoặc cổng cục bộ.

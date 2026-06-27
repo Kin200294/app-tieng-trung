@@ -292,13 +292,12 @@ Example of expected JSON format:
     if (provider === 'openrouter') {
       try {
         const OPENROUTER_MODELS = [
-          { id: 'deepseek/deepseek-chat:free', name: 'DeepSeek V3 (Free - Khuyên dùng)' },
-          { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free - Suy luận)' },
-          { id: 'qwen/qwen-2-7b-instruct:free', name: 'Alibaba Qwen 2 7B (Free)' },
-          { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Meta Llama 3.1 8B (Free)' },
-          { id: 'google/gemma-2-9b-it:free', name: 'Google Gemma 2 9B (Free)' }
+          { id: 'qwen/qwen3-coder:free', name: 'Alibaba Qwen 3 Coder (Free - Tiếng Trung tốt nhất)' },
+          { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Meta Llama 3.3 70B (Free)' },
+          { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Meta Llama 3.2 3B (Free)' },
+          { id: 'google/gemma-4-31b-it:free', name: 'Google Gemma 4 31B (Free)' }
         ];
-        const currentModel = model || localStorage.getItem('hanzi-openrouter-model') || 'deepseek/deepseek-chat:free';
+        const currentModel = model || localStorage.getItem('hanzi-openrouter-model') || 'qwen/qwen3-coder:free';
         const currentKey = typeof window.getOpenRouterKey === 'function' ? window.getOpenRouterKey() : apiKey;
 
         const systemPrompt = `
